@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/narayana-platform/execution-engine/internal/clock"
 	"github.com/narayana-platform/execution-engine/internal/domain"
 	"github.com/narayana-platform/execution-engine/internal/repository"
 	"github.com/narayana-platform/execution-engine/internal/repository/db"
@@ -47,7 +48,7 @@ func TestPublisher_PublishesUnsentEvents(t *testing.T) {
 
 	// Create buffered channel and publisher.
 	eventChan := make(chan domain.OutboxEvent, 10)
-	pub := worker.NewPublisher(repo, eventChan, logger)
+	pub := worker.NewPublisher(repo, eventChan, logger, clock.RealClock{})
 
 	// Run publisher in a goroutine; cancel after enough time for one tick (default 2s).
 	pubCtx, cancel := context.WithCancel(ctx)
@@ -92,7 +93,7 @@ func TestPublisher_SkipsWhenNoEvents(t *testing.T) {
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 
 	eventChan := make(chan domain.OutboxEvent, 10)
-	pub := worker.NewPublisher(repo, eventChan, logger)
+	pub := worker.NewPublisher(repo, eventChan, logger, clock.RealClock{})
 
 	// Run publisher for one tick then cancel.
 	pubCtx, cancel := context.WithCancel(ctx)

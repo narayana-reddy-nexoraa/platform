@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/narayana-platform/execution-engine/internal/contextkeys"
 	"github.com/narayana-platform/execution-engine/internal/domain"
 	"github.com/narayana-platform/execution-engine/internal/repository/db"
 )
@@ -379,7 +380,8 @@ func (r *PostgresExecutionRepository) CompleteWithOutbox(ctx context.Context, ex
 		return nil, err
 	}
 
-	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionSucceeded, &exec, "RUNNING", workerID)
+	correlationID := contextkeys.CorrelationIDFromContext(ctx)
+	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionSucceeded, &exec, "RUNNING", workerID, correlationID)
 	if err != nil {
 		return nil, err
 	}
@@ -437,7 +439,8 @@ func (r *PostgresExecutionRepository) FailWithOutbox(ctx context.Context, execut
 		return nil, err
 	}
 
-	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionFailed, &exec, "RUNNING", workerID)
+	correlationID := contextkeys.CorrelationIDFromContext(ctx)
+	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionFailed, &exec, "RUNNING", workerID, correlationID)
 	if err != nil {
 		return nil, err
 	}
@@ -496,7 +499,8 @@ func (r *PostgresExecutionRepository) RetryWithOutbox(ctx context.Context, execu
 		return nil, err
 	}
 
-	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionRetryScheduled, &exec, "RUNNING", workerID)
+	correlationID := contextkeys.CorrelationIDFromContext(ctx)
+	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionRetryScheduled, &exec, "RUNNING", workerID, correlationID)
 	if err != nil {
 		return nil, err
 	}
@@ -552,7 +556,8 @@ func (r *PostgresExecutionRepository) ReclaimWithOutbox(ctx context.Context, exe
 		return nil, err
 	}
 
-	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionReclaimed, &exec, "CLAIMED", "reaper")
+	correlationID := contextkeys.CorrelationIDFromContext(ctx)
+	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionReclaimed, &exec, "CLAIMED", "reaper", correlationID)
 	if err != nil {
 		return nil, err
 	}
@@ -610,7 +615,8 @@ func (r *PostgresExecutionRepository) ClaimWithOutbox(ctx context.Context, execu
 		return nil, err
 	}
 
-	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionClaimed, &exec, "CREATED", workerID)
+	correlationID := contextkeys.CorrelationIDFromContext(ctx)
+	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionClaimed, &exec, "CREATED", workerID, correlationID)
 	if err != nil {
 		return nil, err
 	}

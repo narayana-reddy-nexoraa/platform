@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
+	"github.com/narayana-platform/execution-engine/internal/clock"
 	"github.com/narayana-platform/execution-engine/internal/domain"
 	"github.com/narayana-platform/execution-engine/internal/metrics"
 	"github.com/narayana-platform/execution-engine/internal/repository"
@@ -24,15 +25,17 @@ type Publisher struct {
 	logger    zerolog.Logger
 	interval  time.Duration
 	batchSize int32
+	clock     clock.Clock
 }
 
-func NewPublisher(repo repository.ExecutionRepository, eventChan chan<- domain.OutboxEvent, logger zerolog.Logger) *Publisher {
+func NewPublisher(repo repository.ExecutionRepository, eventChan chan<- domain.OutboxEvent, logger zerolog.Logger, clk clock.Clock) *Publisher {
 	return &Publisher{
 		repo:      repo,
 		eventChan: eventChan,
 		logger:    logger.With().Str("component", "publisher").Logger(),
 		interval:  defaultPublisherInterval,
 		batchSize: defaultPublisherBatch,
+		clock:     clk,
 	}
 }
 
@@ -53,7 +56,7 @@ func (p *Publisher) Run(ctx context.Context) {
 }
 
 func (p *Publisher) publish(ctx context.Context) {
-	start := time.Now()
+	start := p.clock.Now()
 
 	events, err := p.repo.FetchUnsentEvents(ctx, p.batchSize)
 	if err != nil {
@@ -79,7 +82,7 @@ func (p *Publisher) publish(ctx context.Context) {
 		if err := p.repo.MarkEventsSent(ctx, sentIDs); err != nil {
 			p.logger.Error().Err(err).Int("count", len(sentIDs)).Msg("failed to mark events as sent")
 		} else {
-			metrics.OutboxPublishDurationSeconds.Observe(time.Since(start).Seconds())
+			metrics.OutboxPublishDurationSeconds.Observe(p.clock.Now().Sub(start).Seconds())
 			metrics.EventsPublishedTotal.Add(float64(len(sentIDs)))
 			p.logger.Debug().Int("count", len(sentIDs)).Msg("published events")
 		}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/narayana-platform/execution-engine/internal/clock"
 	"github.com/narayana-platform/execution-engine/internal/domain"
 	"github.com/narayana-platform/execution-engine/internal/metrics"
 	"github.com/narayana-platform/execution-engine/internal/repository"
@@ -23,16 +24,18 @@ type Claimer struct {
 	workerID string
 	logger   zerolog.Logger
 	wg       *sync.WaitGroup
+	clock    clock.Clock
 }
 
 // NewClaimer creates a new claim loop worker.
-func NewClaimer(svc *service.ExecutionService, repo repository.ExecutionRepository, workerID string, logger zerolog.Logger, wg *sync.WaitGroup) *Claimer {
+func NewClaimer(svc *service.ExecutionService, repo repository.ExecutionRepository, workerID string, logger zerolog.Logger, wg *sync.WaitGroup, clk clock.Clock) *Claimer {
 	return &Claimer{
 		service:  svc,
 		repo:     repo,
 		workerID: workerID,
 		logger:   logger.With().Str("worker_id", workerID).Logger(),
 		wg:       wg,
+		clock:    clk,
 	}
 }
 
@@ -55,9 +58,9 @@ func (cl *Claimer) Run(ctx context.Context) {
 
 // poll attempts to claim one execution and process it.
 func (cl *Claimer) poll(parentCtx context.Context) {
-	claimQueryStart := time.Now()
+	claimQueryStart := cl.clock.Now()
 	exec, err := cl.service.ClaimNextExecution(parentCtx, cl.workerID)
-	metrics.ClaimQueryDurationSeconds.Observe(time.Since(claimQueryStart).Seconds())
+	metrics.ClaimQueryDurationSeconds.Observe(cl.clock.Now().Sub(claimQueryStart).Seconds())
 
 	if err != nil {
 		if _, ok := err.(*domain.ErrClaimFailed); ok {
@@ -71,14 +74,14 @@ func (cl *Claimer) poll(parentCtx context.Context) {
 	defer cl.wg.Done()
 
 	metrics.ExecutionsClaimedTotal.Inc()
-	metrics.QueueWaitSeconds.Observe(time.Since(exec.CreatedAt).Seconds())
+	metrics.QueueWaitSeconds.Observe(cl.clock.Now().Sub(exec.CreatedAt).Seconds())
 
 	cl.logger.Info().
 		Str("execution_id", exec.ExecutionID.String()).
 		Int32("attempt", exec.AttemptCount).
 		Msg("claimed execution")
 
-	claimStart := time.Now()
+	claimStart := cl.clock.Now()
 
 	// Transition to RUNNING
 	exec, err = cl.service.UpdateStatus(parentCtx, exec.ExecutionID, domain.StatusRunning, exec.Version)
@@ -96,7 +99,7 @@ func (cl *Claimer) poll(parentCtx context.Context) {
 	execCtx, cancelExec := context.WithCancel(parentCtx)
 
 	// Start heartbeat goroutine
-	hb := NewHeartbeat(cl.service, exec.ExecutionID, cl.workerID, cl.logger)
+	hb := NewHeartbeat(cl.service, exec.ExecutionID, cl.workerID, cl.logger, cl.clock)
 	go hb.Run(execCtx, cancelExec)
 
 	// Process
@@ -114,7 +117,7 @@ func (cl *Claimer) poll(parentCtx context.Context) {
 	}
 
 	if processErr != nil {
-		metrics.ExecutionDurationSeconds.Observe(time.Since(claimStart).Seconds())
+		metrics.ExecutionDurationSeconds.Observe(cl.clock.Now().Sub(claimStart).Seconds())
 		cl.handleFailure(parentCtx, exec, processErr)
 		return
 	}
@@ -126,7 +129,7 @@ func (cl *Claimer) poll(parentCtx context.Context) {
 		return
 	}
 
-	metrics.ExecutionDurationSeconds.Observe(time.Since(claimStart).Seconds())
+	metrics.ExecutionDurationSeconds.Observe(cl.clock.Now().Sub(claimStart).Seconds())
 	metrics.ExecutionsSucceededTotal.Inc()
 
 	// Write processing_log COMPLETED entry

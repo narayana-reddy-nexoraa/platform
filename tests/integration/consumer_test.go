@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/narayana-platform/execution-engine/internal/clock"
 	"github.com/narayana-platform/execution-engine/internal/domain"
 	"github.com/narayana-platform/execution-engine/internal/repository"
 	"github.com/narayana-platform/execution-engine/internal/repository/db"
@@ -29,7 +30,7 @@ func TestConsumer_ProcessesNewEvents(t *testing.T) {
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 
 	eventChan := make(chan domain.OutboxEvent, 10)
-	consumer := worker.NewConsumer(repo, eventChan, "test-group", logger)
+	consumer := worker.NewConsumer(repo, eventChan, "test-group", logger, clock.RealClock{})
 
 	eventID := uuid.New()
 	evt := domain.OutboxEvent{
@@ -89,7 +90,7 @@ func TestConsumer_DeduplicatesEvents(t *testing.T) {
 
 	// Build an event with the same ID and send it through the channel.
 	eventChan := make(chan domain.OutboxEvent, 10)
-	consumer := worker.NewConsumer(repo, eventChan, "test-group", logger)
+	consumer := worker.NewConsumer(repo, eventChan, "test-group", logger, clock.RealClock{})
 
 	evt := domain.OutboxEvent{
 		EventID:        eventID,

@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/narayana-platform/execution-engine/internal/clock"
 	"github.com/narayana-platform/execution-engine/internal/domain"
 	"github.com/narayana-platform/execution-engine/internal/repository"
 	"github.com/narayana-platform/execution-engine/internal/repository/db"
@@ -66,6 +67,7 @@ func TestSimulation_MultiWorkerChaos(t *testing.T) {
 
 	// WaitGroup for tracking in-flight claimer work.
 	var wg sync.WaitGroup
+	clk := clock.RealClock{}
 
 	// Event channel shared between publisher and consumer.
 	eventChan := make(chan domain.OutboxEvent, 1000)
@@ -83,7 +85,7 @@ func TestSimulation_MultiWorkerChaos(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		wCtx, wCancel := context.WithCancel(simCtx)
 		wID := fmt.Sprintf("worker-%d", i)
-		claimer := worker.NewClaimer(svc, repo, wID, logger, &wg)
+		claimer := worker.NewClaimer(svc, repo, wID, logger, &wg, clk)
 		go claimer.Run(wCtx)
 		workers[i] = workerCtx{cancel: wCancel, id: wID}
 	}
@@ -93,12 +95,12 @@ func TestSimulation_MultiWorkerChaos(t *testing.T) {
 	go reaper.Run(simCtx)
 
 	// Publisher — has its own context so we can pause/restart it.
-	pub := worker.NewPublisher(repo, eventChan, logger)
+	pub := worker.NewPublisher(repo, eventChan, logger, clk)
 	pubCtx, pubCancel := context.WithCancel(simCtx)
 	go pub.Run(pubCtx)
 
 	// Consumer — runs for the full simulation lifetime.
-	cons := worker.NewConsumer(repo, eventChan, "sim-group", logger)
+	cons := worker.NewConsumer(repo, eventChan, "sim-group", logger, clk)
 	go cons.Run(simCtx)
 
 	// === CHAOS PHASE (20 seconds) ===
@@ -122,7 +124,7 @@ func TestSimulation_MultiWorkerChaos(t *testing.T) {
 				// Restart after 2 seconds.
 				time.Sleep(2 * time.Second)
 				newCtx, newCancel := context.WithCancel(simCtx)
-				claimer := worker.NewClaimer(svc, repo, workers[idx].id, logger, &wg)
+				claimer := worker.NewClaimer(svc, repo, workers[idx].id, logger, &wg, clk)
 				go claimer.Run(newCtx)
 				workers[idx] = workerCtx{cancel: newCancel, id: workers[idx].id}
 				t.Logf("CHAOS: restarted %s", workers[idx].id)
@@ -148,7 +150,7 @@ func TestSimulation_MultiWorkerChaos(t *testing.T) {
 		}
 		pubCtx2, pubCancel2 := context.WithCancel(simCtx)
 		_ = pubCancel2 // will be cancelled when simCtx is cancelled
-		pub2 := worker.NewPublisher(repo, eventChan, logger)
+		pub2 := worker.NewPublisher(repo, eventChan, logger, clk)
 		go pub2.Run(pubCtx2)
 		t.Log("CHAOS: restarted publisher")
 	}()

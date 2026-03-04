@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
+	"github.com/narayana-platform/execution-engine/internal/clock"
 	"github.com/narayana-platform/execution-engine/internal/metrics"
 	"github.com/narayana-platform/execution-engine/internal/service"
 )
@@ -26,15 +27,17 @@ type Heartbeat struct {
 	workerID    string
 	logger      zerolog.Logger
 	stopped     atomic.Bool
+	clock       clock.Clock
 }
 
 // NewHeartbeat creates a heartbeat for the given execution.
-func NewHeartbeat(svc *service.ExecutionService, executionID uuid.UUID, workerID string, logger zerolog.Logger) *Heartbeat {
+func NewHeartbeat(svc *service.ExecutionService, executionID uuid.UUID, workerID string, logger zerolog.Logger, clk clock.Clock) *Heartbeat {
 	return &Heartbeat{
 		svc:         svc,
 		executionID: executionID,
 		workerID:    workerID,
 		logger:      logger.With().Str("execution_id", executionID.String()).Str("component", "heartbeat").Logger(),
+		clock:       clk,
 	}
 }
 
@@ -51,9 +54,9 @@ func (h *Heartbeat) Run(ctx context.Context, cancelFunc context.CancelFunc) {
 			h.stopped.Store(true)
 			return
 		case <-ticker.C:
-			hbStart := time.Now()
+			hbStart := h.clock.Now()
 			_, err := h.svc.SendHeartbeat(ctx, h.executionID, h.workerID)
-			metrics.HeartbeatDurationSeconds.Observe(time.Since(hbStart).Seconds())
+			metrics.HeartbeatDurationSeconds.Observe(h.clock.Now().Sub(hbStart).Seconds())
 
 			if err != nil {
 				consecutiveFailures++

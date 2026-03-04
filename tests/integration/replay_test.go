@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/narayana-platform/execution-engine/internal/clock"
 	"github.com/narayana-platform/execution-engine/internal/domain"
 	"github.com/narayana-platform/execution-engine/internal/repository"
 	"github.com/narayana-platform/execution-engine/internal/worker"
@@ -62,7 +63,7 @@ func TestReplay_OutOfOrderEvents(t *testing.T) {
 
 	// Round 1: send events out of order (seq 3, 1, 2)
 	eventChan := make(chan domain.OutboxEvent, 10)
-	consumer := worker.NewConsumer(repo, eventChan, "ooo-group", logger)
+	consumer := worker.NewConsumer(repo, eventChan, "ooo-group", logger, clock.RealClock{})
 
 	events := []domain.OutboxEvent{
 		{EventID: uuid.New(), AggregateType: "execution", AggregateID: uuid.New(),
@@ -105,7 +106,7 @@ func TestReplay_OutOfOrderEvents(t *testing.T) {
 
 	// Round 2: new consumer with same group -- send seq 2 again (replay)
 	eventChan2 := make(chan domain.OutboxEvent, 10)
-	consumer2 := worker.NewConsumer(repo, eventChan2, "ooo-group", logger)
+	consumer2 := worker.NewConsumer(repo, eventChan2, "ooo-group", logger, clock.RealClock{})
 	eventChan2 <- events[2] // seq=2
 
 	consumerCtx2, cancel2 := context.WithCancel(ctx)
@@ -135,7 +136,7 @@ func TestReplay_DLQCapture(t *testing.T) {
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 
 	eventChan := make(chan domain.OutboxEvent, 10)
-	consumer := worker.NewConsumer(repo, eventChan, "dlq-group", logger)
+	consumer := worker.NewConsumer(repo, eventChan, "dlq-group", logger, clock.RealClock{})
 
 	// Register a failing handler
 	consumer.RegisterHandler(domain.EventExecutionFailed, func(ctx context.Context, evt domain.OutboxEvent) error {
@@ -207,8 +208,8 @@ func TestReplay_EventReplayFromOutbox(t *testing.T) {
 
 	// Round 1: publisher + consumer
 	eventChan := make(chan domain.OutboxEvent, 10)
-	pub := worker.NewPublisher(repo, eventChan, logger)
-	consumer := worker.NewConsumer(repo, eventChan, "replay-group", logger)
+	pub := worker.NewPublisher(repo, eventChan, logger, clock.RealClock{})
+	consumer := worker.NewConsumer(repo, eventChan, "replay-group", logger, clock.RealClock{})
 
 	ctx1, cancel1 := context.WithCancel(ctx)
 	done1 := make(chan struct{})
@@ -246,8 +247,8 @@ func TestReplay_EventReplayFromOutbox(t *testing.T) {
 
 	// Round 2: new publisher + consumer (same consumer group)
 	eventChan2 := make(chan domain.OutboxEvent, 10)
-	pub2 := worker.NewPublisher(repo, eventChan2, logger)
-	consumer2 := worker.NewConsumer(repo, eventChan2, "replay-group", logger)
+	pub2 := worker.NewPublisher(repo, eventChan2, logger, clock.RealClock{})
+	consumer2 := worker.NewConsumer(repo, eventChan2, "replay-group", logger, clock.RealClock{})
 
 	ctx2, cancel2 := context.WithCancel(ctx)
 	done2 := make(chan struct{})

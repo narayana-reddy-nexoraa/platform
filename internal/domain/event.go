@@ -72,7 +72,8 @@ type DeadLetterEvent struct {
 
 // NewExecutionEvent builds the JSON payload and metadata for an execution lifecycle event.
 // It populates EventData from the Execution struct and EventMetadata with the tenant and trigger source.
-func NewExecutionEvent(eventType string, exec *Execution, fromStatus string, triggeredBy string) (payload, metadata json.RawMessage, err error) {
+// correlationID is propagated from the request context to enable end-to-end tracing.
+func NewExecutionEvent(eventType string, exec *Execution, fromStatus string, triggeredBy string, correlationID string) (payload, metadata json.RawMessage, err error) {
 	data := EventData{
 		ExecutionID: exec.ExecutionID,
 		TenantID:    exec.TenantID,
@@ -98,8 +99,9 @@ func NewExecutionEvent(eventType string, exec *Execution, fromStatus string, tri
 	}
 
 	meta := EventMetadata{
-		TenantID:   exec.TenantID.String(),
-		ProducedBy: triggeredBy,
+		TenantID:      exec.TenantID.String(),
+		CorrelationID: correlationID,
+		ProducedBy:    triggeredBy,
 	}
 
 	metadata, err = json.Marshal(meta)

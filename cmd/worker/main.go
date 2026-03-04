@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/narayana-platform/execution-engine/internal/clock"
 	"github.com/narayana-platform/execution-engine/internal/config"
 	"github.com/narayana-platform/execution-engine/internal/domain"
 	"github.com/narayana-platform/execution-engine/internal/handler"
@@ -60,16 +61,17 @@ func main() {
 	// Wire dependencies
 	repo := repository.NewPostgresExecutionRepository(pool)
 	svc := service.NewExecutionService(repo, int32(cfg.LeaseDurationSeconds), int32(cfg.ClaimBatchSize), logger)
+	clk := clock.RealClock{}
 	var wg sync.WaitGroup
-	claimer := worker.NewClaimer(svc, repo, cfg.WorkerID, logger, &wg)
+	claimer := worker.NewClaimer(svc, repo, cfg.WorkerID, logger, &wg, clk)
 	reaper := worker.NewReaper(svc, logger)
 
 	// Event channel (buffered for backpressure)
 	eventChan := make(chan domain.OutboxEvent, 1000)
 
 	// Publisher & Consumer
-	publisher := worker.NewPublisher(repo, eventChan, logger)
-	consumer := worker.NewConsumer(repo, eventChan, "default", logger)
+	publisher := worker.NewPublisher(repo, eventChan, logger, clk)
+	consumer := worker.NewConsumer(repo, eventChan, "default", logger, clk)
 
 	// Gauge collector
 	gc := worker.NewGaugeCollector(repo, logger)
