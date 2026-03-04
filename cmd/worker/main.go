@@ -45,9 +45,11 @@ func main() {
 	repo := repository.NewPostgresExecutionRepository(pool)
 	svc := service.NewExecutionService(repo, int32(cfg.LeaseDurationSeconds), int32(cfg.ClaimBatchSize), logger)
 	claimer := worker.NewClaimer(svc, cfg.WorkerID, logger)
+	reaper := worker.NewReaper(svc, logger)
 
 	// Start claim loop
 	go claimer.Run(ctx)
+	go reaper.Run(ctx)
 
 	logger.Info().Str("worker_id", cfg.WorkerID).Msg("worker started")
 
