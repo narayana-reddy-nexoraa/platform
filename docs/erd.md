@@ -151,3 +151,120 @@ stateDiagram-v2
 ### Non-Terminal Failure States
 - **FAILED** — can be retried (→ CREATED) if error is retryable and attempts remain
 - **TIMED_OUT** — can be retried (→ CREATED) via reaper recovery
+
+---
+
+## Sequence Diagrams
+
+### Claim and Process Flow
+
+```mermaid
+sequenceDiagram
+    participant W as Worker (Claimer)
+    participant S as Service
+    participant R as Repository
+    participant DB as PostgreSQL
+    participant H as Heartbeat
+
+    W->>S: ClaimNextExecution(workerID)
+    S->>R: FindClaimable(batchSize=5)
+    R->>DB: SELECT ... WHERE status IN ('CREATED','FAILED')<br/>AND (locked_by IS NULL OR lock_expires_at < NOW())
+    DB-->>R: candidates[]
+
+    loop Try each candidate
+        S->>R: ClaimWithOutbox(execID, workerID, leaseDuration, version)
+        R->>DB: BEGIN TX
+        Note over DB: UPDATE status=CLAIMED, locked_by=worker WHERE version=N
+        Note over DB: INSERT execution_transitions
+        Note over DB: INSERT outbox_events
+        R->>DB: COMMIT
+    end
+
+    R-->>S: claimed Execution
+    S-->>W: claimed Execution
+
+    W->>S: UpdateStatus(execID, RUNNING, version)
+    S->>R: UpdateStatus(...)
+    R->>DB: UPDATE status=RUNNING WHERE version=N
+
+    W->>H: Start heartbeat loop
+
+    par Heartbeat Loop
+        loop Every 10s
+            H->>R: SendHeartbeat(execID, workerID)
+            R->>DB: UPDATE lock_expires_at, last_heartbeat_at
+        end
+    and Processing
+        Note over W: Execute business logic
+    end
+
+    W->>H: Stop heartbeat
+
+    alt Success
+        W->>S: CompleteExecution(execID, workerID, version)
+        S->>R: CompleteWithOutbox(...)
+        R->>DB: BEGIN TX
+        Note over DB: UPDATE status=SUCCEEDED, locked_by=NULL
+        Note over DB: INSERT execution_transitions
+        Note over DB: INSERT outbox_events
+        R->>DB: COMMIT
+    else Retryable Failure
+        W->>S: RetryExecution(execID, workerID, ...)
+        S->>R: RetryWithOutbox(...)
+        R->>DB: BEGIN TX (status=CREATED + transition + outbox)
+    else Permanent Failure
+        W->>S: FailExecution(execID, workerID, ...)
+        S->>R: FailWithOutbox(...)
+        R->>DB: BEGIN TX (status=FAILED + transition + outbox)
+    end
+```
+
+### Event Publishing Flow
+
+```mermaid
+sequenceDiagram
+    participant TX as Transactional Write
+    participant DB as PostgreSQL
+    participant P as Publisher
+    participant CH as Go Channel (buf 1000)
+    participant C as Consumer
+    participant PE as processed_events
+    participant DLQ as dead_letter_events
+    participant H as Handler
+
+    TX->>DB: INSERT INTO outbox_events (sent=FALSE)
+    Note over DB: Atomic with state change + transition
+
+    loop Every 2 seconds
+        P->>DB: SELECT FROM outbox_events<br/>WHERE sent=FALSE ORDER BY sequence_number<br/>LIMIT 50 FOR UPDATE SKIP LOCKED
+        DB-->>P: unsent events[]
+
+        loop Each event
+            P->>CH: send(event)
+        end
+
+        P->>DB: UPDATE SET sent=TRUE, sent_at=NOW()<br/>WHERE event_id IN (...)
+    end
+
+    loop Read from channel
+        CH-->>C: receive event
+
+        C->>PE: INSERT (event_id, consumer_group)<br/>ON CONFLICT DO NOTHING RETURNING event_id
+
+        alt New event (row returned)
+            PE-->>C: event_id (is_new=true)
+            C->>H: handler(ctx, event)
+            alt Handler succeeds
+                H-->>C: nil
+                Note over C: Log success, update offset
+            else Handler fails
+                H-->>C: error
+                C->>DLQ: INSERT dead_letter_events
+                Note over C: Log failure, update offset
+            end
+        else Duplicate (no row returned)
+            PE-->>C: ErrNoRows (is_new=false)
+            Note over C: Skip duplicate
+        end
+    end
+```
