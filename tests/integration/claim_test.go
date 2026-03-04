@@ -48,7 +48,7 @@ func TestClaimLifecycle_HappyPath(t *testing.T) {
 	assert.Equal(t, domain.StatusRunning, running.Status)
 
 	// Complete it
-	completed, err := svc.CompleteExecution(ctx, running.ExecutionID, running.Version)
+	completed, err := svc.CompleteExecution(ctx, running.ExecutionID, "worker-test-1", running.Version)
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusSucceeded, completed.Status)
 	assert.Nil(t, completed.LockedBy, "lock should be released")
@@ -86,7 +86,7 @@ func TestClaimLifecycle_FailAndRetry(t *testing.T) {
 	require.NoError(t, err)
 
 	// Fail it
-	failed, err := svc.FailExecution(ctx, running.ExecutionID, "TIMEOUT", "processing timed out", running.Version)
+	failed, err := svc.FailExecution(ctx, running.ExecutionID, "worker-1", "TIMEOUT", "processing timed out", running.Version)
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusFailed, failed.Status)
 	assert.Nil(t, failed.LockedBy, "lock should be released on failure")

@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -133,27 +132,27 @@ func (s *ExecutionService) UpdateStatus(ctx context.Context, executionID uuid.UU
 }
 
 // CompleteExecution marks an execution as SUCCEEDED and releases the lease.
-func (s *ExecutionService) CompleteExecution(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error) {
-	return s.repo.Complete(ctx, executionID, version)
+// Uses the transactional WithOutbox method to atomically update status, insert transition, and publish outbox event.
+func (s *ExecutionService) CompleteExecution(ctx context.Context, executionID uuid.UUID, workerID string, version int32) (*domain.Execution, error) {
+	return s.repo.CompleteWithOutbox(ctx, executionID, workerID, version)
 }
 
 // FailExecution marks an execution as FAILED, records the error, and releases the lease.
-func (s *ExecutionService) FailExecution(ctx context.Context, executionID uuid.UUID, errorCode, errorMessage string, version int32) (*domain.Execution, error) {
-	return s.repo.Fail(ctx, executionID, errorCode, errorMessage, version)
+// Uses the transactional WithOutbox method to atomically update status, insert transition, and publish outbox event.
+func (s *ExecutionService) FailExecution(ctx context.Context, executionID uuid.UUID, workerID string, errorCode, errorMessage string, version int32) (*domain.Execution, error) {
+	return s.repo.FailWithOutbox(ctx, executionID, workerID, errorCode, errorMessage, version)
 }
 
 // RetryExecution re-queues a failed execution with a calculated backoff delay.
-func (s *ExecutionService) RetryExecution(ctx context.Context, executionID uuid.UUID, errorCode, errorMessage string, attemptCount int32, version int32) (*domain.Execution, error) {
+// Uses the transactional WithOutbox method to atomically update status, insert transition, and publish outbox event.
+func (s *ExecutionService) RetryExecution(ctx context.Context, executionID uuid.UUID, workerID string, errorCode, errorMessage string, attemptCount int32, version int32) (*domain.Execution, error) {
 	delay := domain.DefaultRetryPolicy.CalculateDelay(attemptCount)
 	delayMs := delay.Milliseconds()
 
-	exec, err := s.repo.Retry(ctx, executionID, errorCode, errorMessage, delayMs, version)
+	exec, err := s.repo.RetryWithOutbox(ctx, executionID, workerID, errorCode, errorMessage, delayMs, version)
 	if err != nil {
 		return nil, err
 	}
-
-	_ = s.repo.InsertTransition(ctx, executionID, domain.StatusRunning, domain.StatusCreated, "retry-engine",
-		fmt.Sprintf("Retry attempt %d, delay %dms, error: %s", attemptCount, delayMs, errorCode))
 
 	s.logger.Info().
 		Str("execution_id", executionID.String()).
@@ -176,13 +175,12 @@ func (s *ExecutionService) FindExpiredLeases(ctx context.Context, limit int32) (
 }
 
 // ReclaimExecution resets an expired execution back to CREATED.
+// Uses the transactional WithOutbox method to atomically update status, insert transition, and publish outbox event.
 func (s *ExecutionService) ReclaimExecution(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error) {
-	exec, err := s.repo.Reclaim(ctx, executionID, version)
-	if err != nil {
-		return nil, err
-	}
+	return s.repo.ReclaimWithOutbox(ctx, executionID, version)
+}
 
-	_ = s.repo.InsertTransition(ctx, executionID, domain.StatusClaimed, domain.StatusCreated, "reaper", "Lease expired, reclaimed")
-
-	return exec, nil
+// InsertProcessingLog records an action in the processing log.
+func (s *ExecutionService) InsertProcessingLog(ctx context.Context, executionID uuid.UUID, workerID, action string, attemptNumber int32) error {
+	return s.repo.InsertProcessingLog(ctx, executionID, workerID, action, attemptNumber)
 }

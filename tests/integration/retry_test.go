@@ -36,7 +36,7 @@ func TestRetry_RetryableError_SchedulesRetry(t *testing.T) {
 	running, err := svc.UpdateStatus(ctx, claimed.ExecutionID, domain.StatusRunning, claimed.Version)
 	require.NoError(t, err)
 
-	retried, err := svc.RetryExecution(ctx, running.ExecutionID, "DOWNSTREAM_TIMEOUT", "timed out", running.AttemptCount, running.Version)
+	retried, err := svc.RetryExecution(ctx, running.ExecutionID, "worker-1", "DOWNSTREAM_TIMEOUT", "timed out", running.AttemptCount, running.Version)
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusCreated, retried.Status)
 	assert.NotNil(t, retried.RetryAfter)
@@ -69,7 +69,7 @@ func TestRetry_NonRetryableError_TerminalFail(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.False(t, domain.IsRetryableError("VALIDATION_FAILED"))
-	failed, err := svc.FailExecution(ctx, running.ExecutionID, "VALIDATION_FAILED", "bad input", running.Version)
+	failed, err := svc.FailExecution(ctx, running.ExecutionID, "worker-1", "VALIDATION_FAILED", "bad input", running.Version)
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusFailed, failed.Status)
 }
@@ -95,7 +95,7 @@ func TestRetry_MaxAttemptsExhausted_TerminalFail(t *testing.T) {
 	require.NoError(t, err)
 	running, err := svc.UpdateStatus(ctx, claimed.ExecutionID, domain.StatusRunning, claimed.Version)
 	require.NoError(t, err)
-	_, err = svc.RetryExecution(ctx, running.ExecutionID, "DOWNSTREAM_TIMEOUT", "timed out", running.AttemptCount, running.Version)
+	_, err = svc.RetryExecution(ctx, running.ExecutionID, "worker-1", "DOWNSTREAM_TIMEOUT", "timed out", running.AttemptCount, running.Version)
 	require.NoError(t, err)
 
 	// Clear retry_after so it's immediately claimable
@@ -110,7 +110,7 @@ func TestRetry_MaxAttemptsExhausted_TerminalFail(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, running2.AttemptCount, running2.MaxAttempts)
-	failed, err := svc.FailExecution(ctx, running2.ExecutionID, "DOWNSTREAM_TIMEOUT", "timed out again", running2.Version)
+	failed, err := svc.FailExecution(ctx, running2.ExecutionID, "worker-2", "DOWNSTREAM_TIMEOUT", "timed out again", running2.Version)
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusFailed, failed.Status)
 
@@ -141,7 +141,7 @@ func TestRetry_RetryAfter_RespectsDelay(t *testing.T) {
 	running, err := svc.UpdateStatus(ctx, claimed.ExecutionID, domain.StatusRunning, claimed.Version)
 	require.NoError(t, err)
 
-	_, err = svc.RetryExecution(ctx, running.ExecutionID, "DOWNSTREAM_TIMEOUT", "timed out", running.AttemptCount, running.Version)
+	_, err = svc.RetryExecution(ctx, running.ExecutionID, "worker-1", "DOWNSTREAM_TIMEOUT", "timed out", running.AttemptCount, running.Version)
 	require.NoError(t, err)
 
 	// Should NOT be claimable immediately (retry_after is in the future)

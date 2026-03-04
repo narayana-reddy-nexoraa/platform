@@ -39,7 +39,7 @@ func TestStateMachine_ValidTransitions(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusRunning, running.Status)
 
-	completed, err := svc.CompleteExecution(ctx, running.ExecutionID, running.Version)
+	completed, err := svc.CompleteExecution(ctx, running.ExecutionID, "worker-sm", running.Version)
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusSucceeded, completed.Status)
 }
@@ -64,7 +64,7 @@ func TestStateMachine_FailAndRetryPath(t *testing.T) {
 	running, err := svc.UpdateStatus(ctx, claimed.ExecutionID, domain.StatusRunning, claimed.Version)
 	require.NoError(t, err)
 
-	retried, err := svc.RetryExecution(ctx, running.ExecutionID, "DOWNSTREAM_TIMEOUT", "service timed out", running.AttemptCount, running.Version)
+	retried, err := svc.RetryExecution(ctx, running.ExecutionID, "worker-1", "DOWNSTREAM_TIMEOUT", "service timed out", running.AttemptCount, running.Version)
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusCreated, retried.Status)
 	assert.Nil(t, retried.LockedBy)
@@ -96,7 +96,7 @@ func TestStateMachine_AuditTrail(t *testing.T) {
 	require.NoError(t, err)
 	running, err := svc.UpdateStatus(ctx, claimed.ExecutionID, domain.StatusRunning, claimed.Version)
 	require.NoError(t, err)
-	_, err = svc.RetryExecution(ctx, running.ExecutionID, "DOWNSTREAM_5XX", "502 bad gateway", running.AttemptCount, running.Version)
+	_, err = svc.RetryExecution(ctx, running.ExecutionID, "worker-audit", "DOWNSTREAM_5XX", "502 bad gateway", running.AttemptCount, running.Version)
 	require.NoError(t, err)
 
 	var count int64
