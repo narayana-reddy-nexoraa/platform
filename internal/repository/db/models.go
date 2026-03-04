@@ -59,6 +59,22 @@ func (ns NullExecutionStatus) Value() (driver.Value, error) {
 	return string(ns.ExecutionStatus), nil
 }
 
+type DeadLetterEvent struct {
+	ID            uuid.UUID
+	EventID       uuid.UUID
+	ConsumerGroup string
+	EventType     string
+	AggregateType string
+	AggregateID   uuid.UUID
+	Payload       []byte
+	Metadata      []byte
+	ErrorMessage  string
+	AttemptCount  int32
+	MaxAttempts   int32
+	CreatedAt     pgtype.Timestamptz
+	LastFailedAt  pgtype.Timestamptz
+}
+
 type Execution struct {
 	ExecutionID     uuid.UUID
 	TenantID        uuid.UUID

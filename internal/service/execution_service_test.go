@@ -120,6 +120,18 @@ func (m *mockRepo) InsertProcessingLog(ctx context.Context, executionID uuid.UUI
 func (m *mockRepo) InsertProcessedEvent(ctx context.Context, eventID uuid.UUID, consumerGroup string) (bool, error) {
 	return true, nil
 }
+func (m *mockRepo) InsertDLQEvent(ctx context.Context, evt domain.OutboxEvent, consumerGroup string, errMsg string) error {
+	return nil
+}
+func (m *mockRepo) ListDLQEvents(ctx context.Context, consumerGroup string, limit, offset int32) ([]domain.DeadLetterEvent, error) {
+	return nil, nil
+}
+func (m *mockRepo) DeleteDLQEvent(ctx context.Context, id uuid.UUID) error {
+	return nil
+}
+func (m *mockRepo) CountDLQEvents(ctx context.Context, consumerGroup string) (int64, error) {
+	return 0, nil
+}
 
 func newTestService(repo *mockRepo) *ExecutionService {
 	logger := zerolog.Nop()

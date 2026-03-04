@@ -47,6 +47,12 @@ type ExecutionRepository interface {
 	// Processing
 	InsertProcessingLog(ctx context.Context, executionID uuid.UUID, workerID, action string, attemptNumber int32) error
 	InsertProcessedEvent(ctx context.Context, eventID uuid.UUID, consumerGroup string) (bool, error)
+
+	// Dead Letter Queue
+	InsertDLQEvent(ctx context.Context, evt domain.OutboxEvent, consumerGroup string, errMsg string) error
+	ListDLQEvents(ctx context.Context, consumerGroup string, limit, offset int32) ([]domain.DeadLetterEvent, error)
+	DeleteDLQEvent(ctx context.Context, id uuid.UUID) error
+	CountDLQEvents(ctx context.Context, consumerGroup string) (int64, error)
 }
 
 // PostgresExecutionRepository implements ExecutionRepository using PostgreSQL via sqlc.
@@ -680,6 +686,54 @@ func (r *PostgresExecutionRepository) InsertProcessedEvent(ctx context.Context, 
 }
 
 // ---------------------------------------------------------------------------
+// Dead Letter Queue operations
+// ---------------------------------------------------------------------------
+
+// InsertDLQEvent inserts a failed event into the dead letter queue.
+func (r *PostgresExecutionRepository) InsertDLQEvent(ctx context.Context, evt domain.OutboxEvent, consumerGroup string, errMsg string) error {
+	return r.queries.InsertDLQEvent(ctx, db.InsertDLQEventParams{
+		EventID:       evt.EventID,
+		ConsumerGroup: consumerGroup,
+		EventType:     evt.EventType,
+		AggregateType: evt.AggregateType,
+		AggregateID:   evt.AggregateID,
+		Payload:       []byte(evt.Payload),
+		Metadata:      []byte(evt.Metadata),
+		ErrorMessage:  errMsg,
+		AttemptCount:  1,
+		MaxAttempts:   3,
+	})
+}
+
+// ListDLQEvents retrieves dead letter events for a consumer group with pagination.
+func (r *PostgresExecutionRepository) ListDLQEvents(ctx context.Context, consumerGroup string, limit, offset int32) ([]domain.DeadLetterEvent, error) {
+	rows, err := r.queries.ListDLQEvents(ctx, db.ListDLQEventsParams{
+		ConsumerGroup: consumerGroup,
+		Limit:         limit,
+		Offset:        offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	events := make([]domain.DeadLetterEvent, len(rows))
+	for i, row := range rows {
+		events[i] = toDLQDomain(row)
+	}
+	return events, nil
+}
+
+// DeleteDLQEvent removes a dead letter event by ID.
+func (r *PostgresExecutionRepository) DeleteDLQEvent(ctx context.Context, id uuid.UUID) error {
+	return r.queries.DeleteDLQEvent(ctx, id)
+}
+
+// CountDLQEvents returns the number of dead letter events for a consumer group.
+func (r *PostgresExecutionRepository) CountDLQEvents(ctx context.Context, consumerGroup string) (int64, error) {
+	return r.queries.CountDLQEvents(ctx, consumerGroup)
+}
+
+// ---------------------------------------------------------------------------
 // Domain conversion helpers
 // ---------------------------------------------------------------------------
 
@@ -696,6 +750,25 @@ func toOutboxDomain(row db.OutboxEvent) domain.OutboxEvent {
 		CreatedAt:      pgTimestamptzToTime(row.CreatedAt),
 		Sent:           row.Sent,
 		SentAt:         pgTimestamptzToTimePtr(row.SentAt),
+	}
+}
+
+// toDLQDomain converts a sqlc-generated db.DeadLetterEvent to a domain.DeadLetterEvent.
+func toDLQDomain(row db.DeadLetterEvent) domain.DeadLetterEvent {
+	return domain.DeadLetterEvent{
+		ID:            row.ID,
+		EventID:       row.EventID,
+		ConsumerGroup: row.ConsumerGroup,
+		EventType:     row.EventType,
+		AggregateType: row.AggregateType,
+		AggregateID:   row.AggregateID,
+		Payload:       json.RawMessage(row.Payload),
+		Metadata:      json.RawMessage(row.Metadata),
+		ErrorMessage:  row.ErrorMessage,
+		AttemptCount:  row.AttemptCount,
+		MaxAttempts:   row.MaxAttempts,
+		CreatedAt:     pgTimestamptzToTime(row.CreatedAt),
+		LastFailedAt:  pgTimestamptzToTime(row.LastFailedAt),
 	}
 }
 

@@ -53,6 +53,23 @@ type EventMetadata struct {
 	ProducedBy    string `json:"produced_by"`
 }
 
+// DeadLetterEvent represents an event that failed processing.
+type DeadLetterEvent struct {
+	ID            uuid.UUID       `json:"id"`
+	EventID       uuid.UUID       `json:"event_id"`
+	ConsumerGroup string          `json:"consumer_group"`
+	EventType     string          `json:"event_type"`
+	AggregateType string          `json:"aggregate_type"`
+	AggregateID   uuid.UUID       `json:"aggregate_id"`
+	Payload       json.RawMessage `json:"payload"`
+	Metadata      json.RawMessage `json:"metadata"`
+	ErrorMessage  string          `json:"error_message"`
+	AttemptCount  int32           `json:"attempt_count"`
+	MaxAttempts   int32           `json:"max_attempts"`
+	CreatedAt     time.Time       `json:"created_at"`
+	LastFailedAt  time.Time       `json:"last_failed_at"`
+}
+
 // NewExecutionEvent builds the JSON payload and metadata for an execution lifecycle event.
 // It populates EventData from the Execution struct and EventMetadata with the tenant and trigger source.
 func NewExecutionEvent(eventType string, exec *Execution, fromStatus string, triggeredBy string) (payload, metadata json.RawMessage, err error) {

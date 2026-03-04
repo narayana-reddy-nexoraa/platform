@@ -79,7 +79,16 @@ func (c *Consumer) process(ctx context.Context, evt domain.OutboxEvent) {
 	}
 
 	if err := handler(ctx, evt); err != nil {
-		c.logger.Error().Err(err).Str("event_type", evt.EventType).Str("event_id", evt.EventID.String()).Msg("handler failed")
+		c.logger.Error().Err(err).
+			Str("event_type", evt.EventType).
+			Str("event_id", evt.EventID.String()).
+			Msg("handler failed, sending to DLQ")
+
+		if dlqErr := c.repo.InsertDLQEvent(ctx, evt, c.consumerGroup, err.Error()); dlqErr != nil {
+			c.logger.Error().Err(dlqErr).
+				Str("event_id", evt.EventID.String()).
+				Msg("failed to insert into DLQ")
+		}
 	}
 }
 

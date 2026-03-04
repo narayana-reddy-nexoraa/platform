@@ -108,6 +108,6 @@ func truncateExecutions(ctx context.Context) error {
 
 // truncateAll clears all tables between tests.
 func truncateAll(ctx context.Context) error {
-	_, err := testPool.Exec(ctx, "TRUNCATE TABLE processing_log, processed_events, outbox_events, execution_transitions, executions CASCADE")
+	_, err := testPool.Exec(ctx, "TRUNCATE TABLE dead_letter_events, processing_log, processed_events, outbox_events, execution_transitions, executions CASCADE")
 	return err
 }
