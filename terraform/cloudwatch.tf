@@ -24,3 +24,15 @@ resource "aws_cloudwatch_log_group" "worker" {
     ManagedBy   = "terraform"
   }
 }
+
+resource "aws_cloudwatch_log_group" "migrate" {
+  name              = "/ecs/narayana-migrate"
+  retention_in_days = 14
+
+  tags = {
+    Name        = "${var.project_name}-${var.env}-migrate-logs"
+    Project     = var.project_name
+    Environment = var.env
+    ManagedBy   = "terraform"
+  }
+}

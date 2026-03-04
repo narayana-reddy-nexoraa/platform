@@ -128,6 +128,50 @@ resource "aws_ecs_task_definition" "worker" {
 }
 
 # -----------------------------------------------------------------------------
+# Migration Task Definition (one-off run-task, no ECS service)
+# -----------------------------------------------------------------------------
+resource "aws_ecs_task_definition" "migrate" {
+  family                   = "${var.project_name}-${var.env}-migrate"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 256
+  memory                   = 512
+  execution_role_arn       = aws_iam_role.ecs_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "${var.project_name}-migrate"
+      image     = "${aws_ecr_repository.main.repository_url}:latest"
+      essential = true
+
+      command = [
+        "/bin/migrate",
+        "-path", "/migrations",
+        "-database", "postgres://postgres:${var.db_password}@${aws_db_instance.main.endpoint}/execution_engine?sslmode=require",
+        "up"
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.migrate.name
+          "awslogs-region"        = var.region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+    }
+  ])
+
+  tags = {
+    Name        = "${var.project_name}-${var.env}-migrate-task"
+    Project     = var.project_name
+    Environment = var.env
+    ManagedBy   = "terraform"
+  }
+}
+
+# -----------------------------------------------------------------------------
 # API Service (with ALB)
 # -----------------------------------------------------------------------------
 resource "aws_ecs_service" "api" {

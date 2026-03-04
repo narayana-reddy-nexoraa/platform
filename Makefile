@@ -1,7 +1,8 @@
 .PHONY: docker-up docker-down migrate-up migrate-down sqlc-generate \
        build-api build-worker run-api run-worker \
        test test-unit test-integration test-load \
-       docker-build docker-up-full docker-down-full
+       docker-build docker-up-full docker-down-full \
+       deploy tf-plan tf-apply tf-destroy
 
 # --- Infrastructure ---
 docker-up:
@@ -56,3 +57,16 @@ docker-up-full:
 
 docker-down-full:
 	docker compose down -v
+
+# --- AWS Deployment ---
+deploy:
+	@bash scripts/deploy.sh
+
+tf-plan:
+	cd terraform && terraform plan
+
+tf-apply:
+	cd terraform && terraform apply
+
+tf-destroy:
+	cd terraform && terraform destroy

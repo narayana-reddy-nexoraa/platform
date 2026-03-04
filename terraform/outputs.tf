@@ -71,3 +71,18 @@ output "ecs_cluster_arn" {
   description = "ECS cluster ARN"
   value       = aws_ecs_cluster.main.arn
 }
+
+output "ecs_cluster_name" {
+  description = "ECS cluster name"
+  value       = aws_ecs_cluster.main.name
+}
+
+output "migrate_task_definition_arn" {
+  description = "Migration task definition ARN"
+  value       = aws_ecs_task_definition.migrate.arn
+}
+
+output "region" {
+  description = "AWS region"
+  value       = var.region
+}
