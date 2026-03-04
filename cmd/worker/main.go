@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/narayana-platform/execution-engine/internal/config"
+	"github.com/narayana-platform/execution-engine/internal/domain"
 	"github.com/narayana-platform/execution-engine/internal/repository"
 	"github.com/narayana-platform/execution-engine/internal/service"
 	"github.com/narayana-platform/execution-engine/internal/worker"
@@ -47,9 +48,18 @@ func main() {
 	claimer := worker.NewClaimer(svc, repo, cfg.WorkerID, logger)
 	reaper := worker.NewReaper(svc, logger)
 
+	// Event channel (buffered for backpressure)
+	eventChan := make(chan domain.OutboxEvent, 1000)
+
+	// Publisher & Consumer
+	publisher := worker.NewPublisher(repo, eventChan, logger)
+	consumer := worker.NewConsumer(repo, eventChan, "default", logger)
+
 	// Start claim loop
 	go claimer.Run(ctx)
 	go reaper.Run(ctx)
+	go publisher.Run(ctx)
+	go consumer.Run(ctx)
 
 	logger.Info().Str("worker_id", cfg.WorkerID).Msg("worker started")
 

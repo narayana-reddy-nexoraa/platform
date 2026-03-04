@@ -15,6 +15,8 @@ type Config struct {
 	WorkerID                 string
 	HeartbeatIntervalSeconds int
 	ReaperIntervalSeconds    int
+	PublisherIntervalSeconds int
+	PublisherBatchSize       int
 }
 
 func Load() (*Config, error) {
@@ -27,6 +29,8 @@ func Load() (*Config, error) {
 		WorkerID:                 getEnv("WORKER_ID", "worker-1"),
 		HeartbeatIntervalSeconds: getEnvInt("HEARTBEAT_INTERVAL_SECONDS", 10),
 		ReaperIntervalSeconds:    getEnvInt("REAPER_INTERVAL_SECONDS", 10),
+		PublisherIntervalSeconds: getEnvInt("PUBLISHER_INTERVAL_SECONDS", 2),
+		PublisherBatchSize:       getEnvInt("PUBLISHER_BATCH_SIZE", 50),
 	}
 
 	if cfg.DatabaseURL == "" {
