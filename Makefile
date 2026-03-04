@@ -2,6 +2,8 @@
        build-api build-worker run-api run-worker \
        test test-unit test-integration test-load \
        docker-build docker-up-full docker-down-full \
+       demo-setup demo-teardown demo-scenario1 demo-scenario2 \
+       demo-scenario3 demo-scenario4 demo-verify \
        deploy tf-plan tf-apply tf-destroy
 
 # --- Infrastructure ---
@@ -57,6 +59,28 @@ docker-up-full:
 
 docker-down-full:
 	docker compose down -v
+
+# --- Demo ---
+demo-setup:
+	@bash scripts/demo/setup.sh
+
+demo-teardown:
+	@bash scripts/demo/teardown.sh
+
+demo-scenario1:
+	@bash scripts/demo/scenario1_concurrency.sh
+
+demo-scenario2:
+	@bash scripts/demo/scenario2_crash_recovery.sh
+
+demo-scenario3:
+	@bash scripts/demo/scenario3_retry_storm.sh
+
+demo-scenario4:
+	@bash scripts/demo/scenario4_event_pipeline.sh
+
+demo-verify:
+	@bash scripts/demo/verify.sh
 
 # --- AWS Deployment ---
 deploy:
