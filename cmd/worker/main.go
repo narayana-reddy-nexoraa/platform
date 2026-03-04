@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
@@ -58,7 +60,8 @@ func main() {
 	// Wire dependencies
 	repo := repository.NewPostgresExecutionRepository(pool)
 	svc := service.NewExecutionService(repo, int32(cfg.LeaseDurationSeconds), int32(cfg.ClaimBatchSize), logger)
-	claimer := worker.NewClaimer(svc, repo, cfg.WorkerID, logger)
+	var wg sync.WaitGroup
+	claimer := worker.NewClaimer(svc, repo, cfg.WorkerID, logger, &wg)
 	reaper := worker.NewReaper(svc, logger)
 
 	// Event channel (buffered for backpressure)
@@ -109,7 +112,23 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	logger.Info().Msg("shutting down worker...")
-	cancel() // stops the claim loop
+	logger.Info().Msg("shutting down worker, cancelling context...")
+	cancel() // stops the claim loop (no new claims will be made)
+
+	// Wait for in-flight executions to drain with configurable timeout
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	logger.Info().Msg("draining in-flight executions")
+	select {
+	case <-done:
+		logger.Info().Msg("all in-flight work drained successfully")
+	case <-time.After(time.Duration(cfg.ShutdownTimeoutSeconds) * time.Second):
+		logger.Warn().Msg("shutdown timeout exceeded, forcing exit")
+	}
+
 	logger.Info().Msg("worker stopped")
 }

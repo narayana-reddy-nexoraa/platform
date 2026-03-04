@@ -23,6 +23,7 @@ type Config struct {
 	DBMinConns               int
 	DBMaxConnLifetime        time.Duration
 	DBMaxConnIdleTime        time.Duration
+	ShutdownTimeoutSeconds   int
 }
 
 func Load() (*Config, error) {
@@ -42,6 +43,7 @@ func Load() (*Config, error) {
 		DBMinConns:               getEnvInt("DB_MIN_CONNS", 5),
 		DBMaxConnLifetime:        getEnvDuration("DB_MAX_CONN_LIFETIME", 30*time.Minute),
 		DBMaxConnIdleTime:        getEnvDuration("DB_MAX_CONN_IDLE_TIME", 5*time.Minute),
+		ShutdownTimeoutSeconds:   getEnvInt("SHUTDOWN_TIMEOUT_SECONDS", 30),
 	}
 
 	if cfg.DatabaseURL == "" {

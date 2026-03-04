@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -21,15 +22,17 @@ type Claimer struct {
 	repo     repository.ExecutionRepository
 	workerID string
 	logger   zerolog.Logger
+	wg       *sync.WaitGroup
 }
 
 // NewClaimer creates a new claim loop worker.
-func NewClaimer(svc *service.ExecutionService, repo repository.ExecutionRepository, workerID string, logger zerolog.Logger) *Claimer {
+func NewClaimer(svc *service.ExecutionService, repo repository.ExecutionRepository, workerID string, logger zerolog.Logger, wg *sync.WaitGroup) *Claimer {
 	return &Claimer{
 		service:  svc,
 		repo:     repo,
 		workerID: workerID,
 		logger:   logger.With().Str("worker_id", workerID).Logger(),
+		wg:       wg,
 	}
 }
 
@@ -63,6 +66,9 @@ func (cl *Claimer) poll(parentCtx context.Context) {
 		cl.logger.Error().Err(err).Msg("error claiming execution")
 		return
 	}
+
+	cl.wg.Add(1)
+	defer cl.wg.Done()
 
 	metrics.ExecutionsClaimedTotal.Inc()
 	metrics.QueueWaitSeconds.Observe(time.Since(exec.CreatedAt).Seconds())

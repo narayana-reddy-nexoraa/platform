@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -63,6 +64,9 @@ func TestSimulation_MultiWorkerChaos(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	// WaitGroup for tracking in-flight claimer work.
+	var wg sync.WaitGroup
+
 	// Event channel shared between publisher and consumer.
 	eventChan := make(chan domain.OutboxEvent, 1000)
 
@@ -79,7 +83,7 @@ func TestSimulation_MultiWorkerChaos(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		wCtx, wCancel := context.WithCancel(simCtx)
 		wID := fmt.Sprintf("worker-%d", i)
-		claimer := worker.NewClaimer(svc, repo, wID, logger)
+		claimer := worker.NewClaimer(svc, repo, wID, logger, &wg)
 		go claimer.Run(wCtx)
 		workers[i] = workerCtx{cancel: wCancel, id: wID}
 	}
@@ -118,7 +122,7 @@ func TestSimulation_MultiWorkerChaos(t *testing.T) {
 				// Restart after 2 seconds.
 				time.Sleep(2 * time.Second)
 				newCtx, newCancel := context.WithCancel(simCtx)
-				claimer := worker.NewClaimer(svc, repo, workers[idx].id, logger)
+				claimer := worker.NewClaimer(svc, repo, workers[idx].id, logger, &wg)
 				go claimer.Run(newCtx)
 				workers[idx] = workerCtx{cancel: newCancel, id: workers[idx].id}
 				t.Logf("CHAOS: restarted %s", workers[idx].id)
