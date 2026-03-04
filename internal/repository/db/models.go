@@ -89,3 +89,31 @@ type ExecutionTransition struct {
 	Metadata     []byte
 	CreatedAt    pgtype.Timestamptz
 }
+
+type OutboxEvent struct {
+	EventID        uuid.UUID
+	AggregateType  string
+	AggregateID    uuid.UUID
+	EventType      string
+	Payload        []byte
+	Metadata       []byte
+	SequenceNumber int64
+	CreatedAt      pgtype.Timestamptz
+	SentAt         pgtype.Timestamptz
+	Sent           bool
+}
+
+type ProcessedEvent struct {
+	EventID       uuid.UUID
+	ConsumerGroup string
+	ProcessedAt   pgtype.Timestamptz
+}
+
+type ProcessingLog struct {
+	LogID         uuid.UUID
+	ExecutionID   uuid.UUID
+	WorkerID      string
+	Action        string
+	AttemptNumber int32
+	CreatedAt     pgtype.Timestamptz
+}
