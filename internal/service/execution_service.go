@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -139,4 +140,49 @@ func (s *ExecutionService) CompleteExecution(ctx context.Context, executionID uu
 // FailExecution marks an execution as FAILED, records the error, and releases the lease.
 func (s *ExecutionService) FailExecution(ctx context.Context, executionID uuid.UUID, errorCode, errorMessage string, version int32) (*domain.Execution, error) {
 	return s.repo.Fail(ctx, executionID, errorCode, errorMessage, version)
+}
+
+// RetryExecution re-queues a failed execution with a calculated backoff delay.
+func (s *ExecutionService) RetryExecution(ctx context.Context, executionID uuid.UUID, errorCode, errorMessage string, attemptCount int32, version int32) (*domain.Execution, error) {
+	delay := domain.DefaultRetryPolicy.CalculateDelay(attemptCount)
+	delayMs := delay.Milliseconds()
+
+	exec, err := s.repo.Retry(ctx, executionID, errorCode, errorMessage, delayMs, version)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = s.repo.InsertTransition(ctx, executionID, domain.StatusRunning, domain.StatusCreated, "retry-engine",
+		fmt.Sprintf("Retry attempt %d, delay %dms, error: %s", attemptCount, delayMs, errorCode))
+
+	s.logger.Info().
+		Str("execution_id", executionID.String()).
+		Int32("attempt", attemptCount).
+		Int64("delay_ms", delayMs).
+		Str("error_code", errorCode).
+		Msg("execution scheduled for retry")
+
+	return exec, nil
+}
+
+// SendHeartbeat extends the lease for an active execution.
+func (s *ExecutionService) SendHeartbeat(ctx context.Context, executionID uuid.UUID, workerID string) (*domain.Execution, error) {
+	return s.repo.SendHeartbeat(ctx, executionID, s.leaseDuration, workerID)
+}
+
+// FindExpiredLeases returns executions with expired locks.
+func (s *ExecutionService) FindExpiredLeases(ctx context.Context, limit int32) ([]domain.Execution, error) {
+	return s.repo.FindExpiredLeases(ctx, limit)
+}
+
+// ReclaimExecution resets an expired execution back to CREATED.
+func (s *ExecutionService) ReclaimExecution(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error) {
+	exec, err := s.repo.Reclaim(ctx, executionID, version)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = s.repo.InsertTransition(ctx, executionID, domain.StatusClaimed, domain.StatusCreated, "reaper", "Lease expired, reclaimed")
+
+	return exec, nil
 }
