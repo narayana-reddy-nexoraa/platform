@@ -30,6 +30,23 @@ type ExecutionRepository interface {
 	Reclaim(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error)
 	Retry(ctx context.Context, executionID uuid.UUID, errorCode, errorMessage string, delayMs int64, version int32) (*domain.Execution, error)
 	InsertTransition(ctx context.Context, executionID uuid.UUID, fromStatus, toStatus domain.ExecutionStatus, triggeredBy, reason string) error
+
+	// Transactional outbox methods — execute mutation + transition + outbox event in one TX.
+	CompleteWithOutbox(ctx context.Context, executionID uuid.UUID, workerID string, version int32) (*domain.Execution, error)
+	FailWithOutbox(ctx context.Context, executionID uuid.UUID, workerID string, errorCode, errorMessage string, version int32) (*domain.Execution, error)
+	RetryWithOutbox(ctx context.Context, executionID uuid.UUID, workerID string, errorCode, errorMessage string, delayMs int64, version int32) (*domain.Execution, error)
+	ReclaimWithOutbox(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error)
+	ClaimWithOutbox(ctx context.Context, executionID uuid.UUID, workerID string, leaseDuration int32, version int32) (*domain.Execution, error)
+
+	// Outbox operations
+	FetchUnsentEvents(ctx context.Context, limit int32) ([]domain.OutboxEvent, error)
+	MarkEventsSent(ctx context.Context, eventIDs []uuid.UUID) error
+	CleanupOldEvents(ctx context.Context, olderThan time.Time) error
+	CountUnsentEvents(ctx context.Context) (int64, error)
+
+	// Processing
+	InsertProcessingLog(ctx context.Context, executionID uuid.UUID, workerID, action string, attemptNumber int32) error
+	InsertProcessedEvent(ctx context.Context, eventID uuid.UUID, consumerGroup string) (bool, error)
 }
 
 // PostgresExecutionRepository implements ExecutionRepository using PostgreSQL via sqlc.
@@ -293,6 +310,393 @@ func (r *PostgresExecutionRepository) InsertTransition(ctx context.Context, exec
 		TriggeredBy: triggeredBy,
 		Reason:      pgtype.Text{String: reason, Valid: reason != ""},
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Transactional WithOutbox methods
+// ---------------------------------------------------------------------------
+
+// CompleteWithOutbox atomically completes an execution (RUNNING → SUCCEEDED),
+// inserts a transition record, and publishes an outbox event.
+func (r *PostgresExecutionRepository) CompleteWithOutbox(ctx context.Context, executionID uuid.UUID, workerID string, version int32) (*domain.Execution, error) {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := db.New(tx)
+
+	row, err := qtx.CompleteExecution(ctx, db.CompleteExecutionParams{
+		ExecutionID: executionID,
+		Version:     version,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &domain.ErrOptimisticLock{ExecutionID: executionID.String()}
+		}
+		return nil, err
+	}
+
+	exec := toDomain(row)
+
+	if err := qtx.InsertTransition(ctx, db.InsertTransitionParams{
+		ExecutionID: executionID,
+		FromStatus:  db.ExecutionStatusRUNNING,
+		ToStatus:    db.ExecutionStatusSUCCEEDED,
+		TriggeredBy: workerID,
+		Reason:      pgtype.Text{String: "execution completed successfully", Valid: true},
+	}); err != nil {
+		return nil, err
+	}
+
+	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionSucceeded, &exec, "RUNNING", workerID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := qtx.InsertOutboxEvent(ctx, db.InsertOutboxEventParams{
+		AggregateType: "execution",
+		AggregateID:   executionID,
+		EventType:     domain.EventExecutionSucceeded,
+		Payload:       payload,
+		Metadata:      metadata,
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &exec, nil
+}
+
+// FailWithOutbox atomically fails an execution (RUNNING → FAILED),
+// inserts a transition record, and publishes an outbox event.
+func (r *PostgresExecutionRepository) FailWithOutbox(ctx context.Context, executionID uuid.UUID, workerID string, errorCode, errorMessage string, version int32) (*domain.Execution, error) {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := db.New(tx)
+
+	row, err := qtx.FailExecution(ctx, db.FailExecutionParams{
+		ExecutionID:  executionID,
+		ErrorCode:    pgtype.Text{String: errorCode, Valid: true},
+		ErrorMessage: pgtype.Text{String: errorMessage, Valid: true},
+		Version:      version,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &domain.ErrOptimisticLock{ExecutionID: executionID.String()}
+		}
+		return nil, err
+	}
+
+	exec := toDomain(row)
+
+	if err := qtx.InsertTransition(ctx, db.InsertTransitionParams{
+		ExecutionID: executionID,
+		FromStatus:  db.ExecutionStatusRUNNING,
+		ToStatus:    db.ExecutionStatusFAILED,
+		TriggeredBy: workerID,
+		Reason:      pgtype.Text{String: errorMessage, Valid: true},
+	}); err != nil {
+		return nil, err
+	}
+
+	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionFailed, &exec, "RUNNING", workerID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := qtx.InsertOutboxEvent(ctx, db.InsertOutboxEventParams{
+		AggregateType: "execution",
+		AggregateID:   executionID,
+		EventType:     domain.EventExecutionFailed,
+		Payload:       payload,
+		Metadata:      metadata,
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &exec, nil
+}
+
+// RetryWithOutbox atomically schedules a retry (RUNNING → CREATED with retry_after),
+// inserts a transition record, and publishes an outbox event.
+func (r *PostgresExecutionRepository) RetryWithOutbox(ctx context.Context, executionID uuid.UUID, workerID string, errorCode, errorMessage string, delayMs int64, version int32) (*domain.Execution, error) {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := db.New(tx)
+
+	row, err := qtx.RetryExecution(ctx, db.RetryExecutionParams{
+		ExecutionID:  executionID,
+		ErrorCode:    pgtype.Text{String: errorCode, Valid: true},
+		ErrorMessage: pgtype.Text{String: errorMessage, Valid: true},
+		Column4:      delayMs,
+		Version:      version,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &domain.ErrOptimisticLock{ExecutionID: executionID.String()}
+		}
+		return nil, err
+	}
+
+	exec := toDomain(row)
+
+	if err := qtx.InsertTransition(ctx, db.InsertTransitionParams{
+		ExecutionID: executionID,
+		FromStatus:  db.ExecutionStatusRUNNING,
+		ToStatus:    db.ExecutionStatusCREATED,
+		TriggeredBy: workerID,
+		Reason:      pgtype.Text{String: errorMessage, Valid: true},
+	}); err != nil {
+		return nil, err
+	}
+
+	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionRetryScheduled, &exec, "RUNNING", workerID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := qtx.InsertOutboxEvent(ctx, db.InsertOutboxEventParams{
+		AggregateType: "execution",
+		AggregateID:   executionID,
+		EventType:     domain.EventExecutionRetryScheduled,
+		Payload:       payload,
+		Metadata:      metadata,
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &exec, nil
+}
+
+// ReclaimWithOutbox atomically reclaims an execution (CLAIMED → CREATED),
+// inserts a transition record, and publishes an outbox event.
+func (r *PostgresExecutionRepository) ReclaimWithOutbox(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error) {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := db.New(tx)
+
+	row, err := qtx.ReclaimExecution(ctx, db.ReclaimExecutionParams{
+		ExecutionID: executionID,
+		Version:     version,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &domain.ErrOptimisticLock{ExecutionID: executionID.String()}
+		}
+		return nil, err
+	}
+
+	exec := toDomain(row)
+
+	if err := qtx.InsertTransition(ctx, db.InsertTransitionParams{
+		ExecutionID: executionID,
+		FromStatus:  db.ExecutionStatusCLAIMED,
+		ToStatus:    db.ExecutionStatusCREATED,
+		TriggeredBy: "reaper",
+		Reason:      pgtype.Text{String: "lease expired, reclaiming execution", Valid: true},
+	}); err != nil {
+		return nil, err
+	}
+
+	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionReclaimed, &exec, "CLAIMED", "reaper")
+	if err != nil {
+		return nil, err
+	}
+
+	if err := qtx.InsertOutboxEvent(ctx, db.InsertOutboxEventParams{
+		AggregateType: "execution",
+		AggregateID:   executionID,
+		EventType:     domain.EventExecutionReclaimed,
+		Payload:       payload,
+		Metadata:      metadata,
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &exec, nil
+}
+
+// ClaimWithOutbox atomically claims an execution (CREATED → CLAIMED),
+// inserts a transition record, and publishes an outbox event.
+func (r *PostgresExecutionRepository) ClaimWithOutbox(ctx context.Context, executionID uuid.UUID, workerID string, leaseDuration int32, version int32) (*domain.Execution, error) {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := db.New(tx)
+
+	row, err := qtx.ClaimExecution(ctx, db.ClaimExecutionParams{
+		ExecutionID: executionID,
+		LockedBy:    pgtype.Text{String: workerID, Valid: true},
+		Column3:     leaseDuration,
+		Version:     version,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &domain.ErrOptimisticLock{ExecutionID: executionID.String()}
+		}
+		return nil, err
+	}
+
+	exec := toDomain(row)
+
+	if err := qtx.InsertTransition(ctx, db.InsertTransitionParams{
+		ExecutionID: executionID,
+		FromStatus:  db.ExecutionStatusCREATED,
+		ToStatus:    db.ExecutionStatusCLAIMED,
+		TriggeredBy: workerID,
+		Reason:      pgtype.Text{String: "execution claimed by worker", Valid: true},
+	}); err != nil {
+		return nil, err
+	}
+
+	payload, metadata, err := domain.NewExecutionEvent(domain.EventExecutionClaimed, &exec, "CREATED", workerID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := qtx.InsertOutboxEvent(ctx, db.InsertOutboxEventParams{
+		AggregateType: "execution",
+		AggregateID:   executionID,
+		EventType:     domain.EventExecutionClaimed,
+		Payload:       payload,
+		Metadata:      metadata,
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &exec, nil
+}
+
+// ---------------------------------------------------------------------------
+// Outbox operations
+// ---------------------------------------------------------------------------
+
+// FetchUnsentEvents retrieves unsent outbox events within a transaction
+// (required because the query uses FOR UPDATE SKIP LOCKED).
+func (r *PostgresExecutionRepository) FetchUnsentEvents(ctx context.Context, limit int32) ([]domain.OutboxEvent, error) {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := db.New(tx)
+	rows, err := qtx.FetchUnsentEvents(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	events := make([]domain.OutboxEvent, len(rows))
+	for i, row := range rows {
+		events[i] = toOutboxDomain(row)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return events, nil
+}
+
+// MarkEventsSent marks the given outbox events as sent.
+func (r *PostgresExecutionRepository) MarkEventsSent(ctx context.Context, eventIDs []uuid.UUID) error {
+	return r.queries.MarkEventsSent(ctx, eventIDs)
+}
+
+// CleanupOldEvents deletes sent outbox events older than the given time.
+func (r *PostgresExecutionRepository) CleanupOldEvents(ctx context.Context, olderThan time.Time) error {
+	return r.queries.CleanupOldEvents(ctx, pgtype.Timestamptz{Time: olderThan, Valid: true})
+}
+
+// CountUnsentEvents returns the number of unsent outbox events.
+func (r *PostgresExecutionRepository) CountUnsentEvents(ctx context.Context) (int64, error) {
+	return r.queries.CountUnsentEvents(ctx)
+}
+
+// ---------------------------------------------------------------------------
+// Processing operations
+// ---------------------------------------------------------------------------
+
+// InsertProcessingLog records an action in the processing log.
+func (r *PostgresExecutionRepository) InsertProcessingLog(ctx context.Context, executionID uuid.UUID, workerID, action string, attemptNumber int32) error {
+	return r.queries.InsertProcessingLog(ctx, db.InsertProcessingLogParams{
+		ExecutionID:   executionID,
+		WorkerID:      workerID,
+		Action:        action,
+		AttemptNumber: attemptNumber,
+	})
+}
+
+// InsertProcessedEvent records an event as processed for idempotent consumption.
+// Returns (true, nil) if newly inserted, (false, nil) if already processed (duplicate).
+func (r *PostgresExecutionRepository) InsertProcessedEvent(ctx context.Context, eventID uuid.UUID, consumerGroup string) (bool, error) {
+	_, err := r.queries.InsertProcessedEvent(ctx, db.InsertProcessedEventParams{
+		EventID:       eventID,
+		ConsumerGroup: consumerGroup,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil // duplicate — already processed
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// ---------------------------------------------------------------------------
+// Domain conversion helpers
+// ---------------------------------------------------------------------------
+
+// toOutboxDomain converts a sqlc-generated db.OutboxEvent to a domain.OutboxEvent.
+func toOutboxDomain(row db.OutboxEvent) domain.OutboxEvent {
+	return domain.OutboxEvent{
+		EventID:        row.EventID,
+		AggregateType:  row.AggregateType,
+		AggregateID:    row.AggregateID,
+		EventType:      row.EventType,
+		Payload:        json.RawMessage(row.Payload),
+		Metadata:       json.RawMessage(row.Metadata),
+		SequenceNumber: row.SequenceNumber,
+		CreatedAt:      pgTimestamptzToTime(row.CreatedAt),
+		Sent:           row.Sent,
+		SentAt:         pgTimestamptzToTimePtr(row.SentAt),
+	}
 }
 
 // toDomain converts a sqlc-generated db.Execution to a domain.Execution.

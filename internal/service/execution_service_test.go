@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -83,6 +84,41 @@ func (m *mockRepo) InsertTransition(ctx context.Context, executionID uuid.UUID, 
 		return m.insertTransitionFn(ctx, executionID, fromStatus, toStatus, triggeredBy, reason)
 	}
 	return nil
+}
+
+// Transactional outbox method stubs — satisfy interface; tests for these come in later tasks.
+func (m *mockRepo) CompleteWithOutbox(ctx context.Context, executionID uuid.UUID, workerID string, version int32) (*domain.Execution, error) {
+	return nil, nil
+}
+func (m *mockRepo) FailWithOutbox(ctx context.Context, executionID uuid.UUID, workerID string, errorCode, errorMessage string, version int32) (*domain.Execution, error) {
+	return nil, nil
+}
+func (m *mockRepo) RetryWithOutbox(ctx context.Context, executionID uuid.UUID, workerID string, errorCode, errorMessage string, delayMs int64, version int32) (*domain.Execution, error) {
+	return nil, nil
+}
+func (m *mockRepo) ReclaimWithOutbox(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error) {
+	return nil, nil
+}
+func (m *mockRepo) ClaimWithOutbox(ctx context.Context, executionID uuid.UUID, workerID string, leaseDuration int32, version int32) (*domain.Execution, error) {
+	return nil, nil
+}
+func (m *mockRepo) FetchUnsentEvents(ctx context.Context, limit int32) ([]domain.OutboxEvent, error) {
+	return nil, nil
+}
+func (m *mockRepo) MarkEventsSent(ctx context.Context, eventIDs []uuid.UUID) error {
+	return nil
+}
+func (m *mockRepo) CleanupOldEvents(ctx context.Context, olderThan time.Time) error {
+	return nil
+}
+func (m *mockRepo) CountUnsentEvents(ctx context.Context) (int64, error) {
+	return 0, nil
+}
+func (m *mockRepo) InsertProcessingLog(ctx context.Context, executionID uuid.UUID, workerID, action string, attemptNumber int32) error {
+	return nil
+}
+func (m *mockRepo) InsertProcessedEvent(ctx context.Context, eventID uuid.UUID, consumerGroup string) (bool, error) {
+	return true, nil
 }
 
 func newTestService(repo *mockRepo) *ExecutionService {
