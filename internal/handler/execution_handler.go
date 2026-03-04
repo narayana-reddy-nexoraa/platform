@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
@@ -8,16 +9,22 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/narayana-platform/execution-engine/internal/domain"
-	"github.com/narayana-platform/execution-engine/internal/service"
 )
+
+// ExecutionServiceInterface defines the methods the handler needs from the service layer.
+type ExecutionServiceInterface interface {
+	CreateExecution(ctx context.Context, tenantID uuid.UUID, idempotencyKey string, req domain.CreateExecutionRequest) (*domain.Execution, bool, error)
+	GetExecution(ctx context.Context, executionID, tenantID uuid.UUID) (*domain.Execution, error)
+	ListExecutions(ctx context.Context, tenantID uuid.UUID, status *domain.ExecutionStatus, limit, offset int32) (*domain.PaginatedResponse, error)
+}
 
 // ExecutionHandler handles HTTP requests for the executions resource.
 type ExecutionHandler struct {
-	service *service.ExecutionService
+	service ExecutionServiceInterface
 }
 
 // NewExecutionHandler creates a new handler instance.
-func NewExecutionHandler(svc *service.ExecutionService) *ExecutionHandler {
+func NewExecutionHandler(svc ExecutionServiceInterface) *ExecutionHandler {
 	return &ExecutionHandler{service: svc}
 }
 
