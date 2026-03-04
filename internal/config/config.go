@@ -24,6 +24,7 @@ type Config struct {
 	DBMaxConnLifetime        time.Duration
 	DBMaxConnIdleTime        time.Duration
 	ShutdownTimeoutSeconds   int
+	FailureRate              float64
 }
 
 func Load() (*Config, error) {
@@ -44,6 +45,7 @@ func Load() (*Config, error) {
 		DBMaxConnLifetime:        getEnvDuration("DB_MAX_CONN_LIFETIME", 30*time.Minute),
 		DBMaxConnIdleTime:        getEnvDuration("DB_MAX_CONN_IDLE_TIME", 5*time.Minute),
 		ShutdownTimeoutSeconds:   getEnvInt("SHUTDOWN_TIMEOUT_SECONDS", 30),
+		FailureRate:              getEnvFloat("FAILURE_RATE", 0.0),
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -66,6 +68,18 @@ func getEnvInt(key string, fallback int) int {
 		return fallback
 	}
 	parsed, err := strconv.Atoi(val)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func getEnvFloat(key string, fallback float64) float64 {
+	val, ok := os.LookupEnv(key)
+	if !ok {
+		return fallback
+	}
+	parsed, err := strconv.ParseFloat(val, 64)
 	if err != nil {
 		return fallback
 	}

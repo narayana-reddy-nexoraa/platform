@@ -63,7 +63,7 @@ func main() {
 	svc := service.NewExecutionService(repo, int32(cfg.LeaseDurationSeconds), int32(cfg.ClaimBatchSize), logger)
 	clk := clock.RealClock{}
 	var wg sync.WaitGroup
-	claimer := worker.NewClaimer(svc, repo, cfg.WorkerID, logger, &wg, clk)
+	claimer := worker.NewClaimer(svc, repo, cfg.WorkerID, logger, &wg, clk, cfg.FailureRate)
 	reaper := worker.NewReaper(svc, logger)
 
 	// Event channel (buffered for backpressure)
