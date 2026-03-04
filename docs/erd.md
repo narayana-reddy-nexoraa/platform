@@ -63,9 +63,32 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL DEFAULT NOW()"
     }
 
+    DEAD_LETTER_EVENTS {
+        UUID id PK "DEFAULT gen_random_uuid()"
+        UUID event_id "NOT NULL"
+        VARCHAR(100) consumer_group "NOT NULL"
+        VARCHAR(100) event_type "NOT NULL"
+        VARCHAR(100) aggregate_type "NOT NULL"
+        UUID aggregate_id "NOT NULL"
+        JSONB payload "NOT NULL"
+        JSONB metadata "nullable"
+        TEXT error_message "NOT NULL"
+        INTEGER attempt_count "NOT NULL DEFAULT 1"
+        INTEGER max_attempts "NOT NULL DEFAULT 3"
+        TIMESTAMPTZ created_at "NOT NULL DEFAULT NOW()"
+        TIMESTAMPTZ last_failed_at "NOT NULL DEFAULT NOW()"
+    }
+
+    CONSUMER_OFFSETS {
+        VARCHAR(100) consumer_group PK "NOT NULL"
+        BIGINT last_processed_seq "NOT NULL DEFAULT 0"
+        TIMESTAMPTZ updated_at "NOT NULL DEFAULT NOW()"
+    }
+
     EXECUTIONS ||--o{ EXECUTION_TRANSITIONS : "has audit trail"
     EXECUTIONS ||--o{ PROCESSING_LOG : "has processing audit"
     OUTBOX_EVENTS ||--o| PROCESSED_EVENTS : "deduplication"
+    OUTBOX_EVENTS ||--o{ DEAD_LETTER_EVENTS : "failed processing"
 ```
 
 ### Constraints
@@ -106,6 +129,19 @@ erDiagram
 ### processed_events
 
 Composite primary key `(event_id, consumer_group)` — ensures each event is processed exactly once per consumer group.
+
+### dead_letter_events
+
+Captures events that failed handler processing. Indexed by `consumer_group` and `event_id` for retrieval and retry.
+
+| Name | Columns | Condition | Purpose |
+|------|---------|-----------|---------|
+| `idx_dlq_consumer_group` | `(consumer_group, created_at DESC)` | — | List DLQ events per group |
+| `idx_dlq_event_id` | `(event_id)` | — | Lookup by original event |
+
+### consumer_offsets
+
+Tracks last processed sequence number per consumer group. Primary key on `consumer_group`. Used for replay guard on consumer restart — events at or below this offset are skipped.
 
 ### processing_log Indexes
 

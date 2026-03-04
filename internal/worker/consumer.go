@@ -19,7 +19,8 @@ type Consumer struct {
 	handlers         map[string]EventHandler
 	consumerGroup    string
 	logger           zerolog.Logger
-	lastProcessedSeq int64
+	startOffset      int64 // offset loaded from DB on startup — used as replay guard
+	lastProcessedSeq int64 // running high-water mark — used for offset persistence only
 }
 
 func NewConsumer(repo repository.ExecutionRepository, eventChan <-chan domain.OutboxEvent, consumerGroup string, logger zerolog.Logger) *Consumer {
@@ -51,6 +52,7 @@ func (c *Consumer) Run(ctx context.Context) {
 	if err != nil {
 		c.logger.Error().Err(err).Msg("failed to load consumer offset, starting from 0")
 	} else {
+		c.startOffset = offset
 		c.lastProcessedSeq = offset
 		if offset > 0 {
 			c.logger.Info().Int64("last_processed_seq", offset).Msg("loaded consumer offset")
@@ -73,13 +75,15 @@ func (c *Consumer) Run(ctx context.Context) {
 }
 
 func (c *Consumer) process(ctx context.Context, evt domain.OutboxEvent) {
-	// Replay guard: skip events at or below last processed sequence
-	if evt.SequenceNumber > 0 && evt.SequenceNumber <= c.lastProcessedSeq {
+	// Replay guard: skip events at or below the offset loaded from DB on startup.
+	// This prevents reprocessing old events after a restart. During live processing,
+	// out-of-order events are handled by the processed_events dedup table.
+	if evt.SequenceNumber > 0 && evt.SequenceNumber <= c.startOffset {
 		c.logger.Debug().
 			Int64("event_seq", evt.SequenceNumber).
-			Int64("last_processed_seq", c.lastProcessedSeq).
+			Int64("start_offset", c.startOffset).
 			Str("event_id", evt.EventID.String()).
-			Msg("skipping already-processed sequence")
+			Msg("skipping already-processed sequence (replay guard)")
 		return
 	}
 
