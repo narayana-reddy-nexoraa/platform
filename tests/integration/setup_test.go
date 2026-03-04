@@ -102,7 +102,7 @@ func runMigrations(ctx context.Context) error {
 
 // truncateExecutions clears the executions table between tests.
 func truncateExecutions(ctx context.Context) error {
-	_, err := testPool.Exec(ctx, "TRUNCATE TABLE executions")
+	_, err := testPool.Exec(ctx, "TRUNCATE TABLE executions CASCADE")
 	return err
 }
 
