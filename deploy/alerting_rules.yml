@@ -1,0 +1,64 @@
+groups:
+  - name: execution_engine_critical
+    rules:
+      - alert: HighFailureRate
+        expr: >
+          rate(execution_engine_executions_failed_total[5m])
+          / (rate(execution_engine_executions_succeeded_total[5m]) + rate(execution_engine_executions_failed_total[5m]))
+          > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High execution failure rate (> 10%)"
+          description: "The execution failure rate has exceeded 10% for the last 5 minutes."
+
+      - alert: AllWorkersDown
+        expr: up{job="worker"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "All workers are down"
+          description: "No worker instances are reachable by Prometheus."
+
+      - alert: OutboxBacklogCritical
+        expr: execution_engine_outbox_unsent_count > 10000
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Outbox backlog critical (> 10000 unsent events)"
+          description: "The outbox has more than 10,000 unsent events for over 5 minutes."
+
+  - name: execution_engine_warning
+    rules:
+      - alert: HighP95Latency
+        expr: histogram_quantile(0.95, rate(execution_engine_execution_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High P95 execution latency (> 5s)"
+          description: "The 95th percentile execution duration has exceeded 5 seconds for 5 minutes."
+
+      - alert: DLQAccumulating
+        expr: rate(execution_engine_events_dlq_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dead letter queue is accumulating events"
+          description: "Events have been sent to the DLQ continuously for 10 minutes."
+
+      - alert: HeartbeatFailures
+        expr: >
+          rate(execution_engine_heartbeats_total{status="failure"}[5m])
+          / rate(execution_engine_heartbeats_total[5m])
+          > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Heartbeat failure rate exceeds 1%"
+          description: "More than 1% of heartbeat attempts are failing over the last 5 minutes."
