@@ -14,11 +14,12 @@ type EventHandler func(ctx context.Context, event domain.OutboxEvent) error
 
 // Consumer reads events from a channel and processes them with deduplication.
 type Consumer struct {
-	repo          repository.ExecutionRepository
-	eventChan     <-chan domain.OutboxEvent
-	handlers      map[string]EventHandler
-	consumerGroup string
-	logger        zerolog.Logger
+	repo             repository.ExecutionRepository
+	eventChan        <-chan domain.OutboxEvent
+	handlers         map[string]EventHandler
+	consumerGroup    string
+	logger           zerolog.Logger
+	lastProcessedSeq int64
 }
 
 func NewConsumer(repo repository.ExecutionRepository, eventChan <-chan domain.OutboxEvent, consumerGroup string, logger zerolog.Logger) *Consumer {
@@ -44,6 +45,18 @@ func NewConsumer(repo repository.ExecutionRepository, eventChan <-chan domain.Ou
 
 func (c *Consumer) Run(ctx context.Context) {
 	c.logger.Info().Msg("consumer started")
+
+	// Load last processed sequence on startup
+	offset, err := c.repo.GetConsumerOffset(ctx, c.consumerGroup)
+	if err != nil {
+		c.logger.Error().Err(err).Msg("failed to load consumer offset, starting from 0")
+	} else {
+		c.lastProcessedSeq = offset
+		if offset > 0 {
+			c.logger.Info().Int64("last_processed_seq", offset).Msg("loaded consumer offset")
+		}
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -60,7 +73,26 @@ func (c *Consumer) Run(ctx context.Context) {
 }
 
 func (c *Consumer) process(ctx context.Context, evt domain.OutboxEvent) {
-	// Deduplicate
+	// Replay guard: skip events at or below last processed sequence
+	if evt.SequenceNumber > 0 && evt.SequenceNumber <= c.lastProcessedSeq {
+		c.logger.Debug().
+			Int64("event_seq", evt.SequenceNumber).
+			Int64("last_processed_seq", c.lastProcessedSeq).
+			Str("event_id", evt.EventID.String()).
+			Msg("skipping already-processed sequence")
+		return
+	}
+
+	// Gap detection: warn if sequence jumps
+	if c.lastProcessedSeq > 0 && evt.SequenceNumber > c.lastProcessedSeq+1 {
+		c.logger.Warn().
+			Int64("event_seq", evt.SequenceNumber).
+			Int64("last_processed_seq", c.lastProcessedSeq).
+			Int64("gap", evt.SequenceNumber-c.lastProcessedSeq-1).
+			Msg("sequence gap detected")
+	}
+
+	// Deduplicate via processed_events table
 	isNew, err := c.repo.InsertProcessedEvent(ctx, evt.EventID, c.consumerGroup)
 	if err != nil {
 		c.logger.Error().Err(err).Str("event_id", evt.EventID.String()).Msg("deduplication check failed")
@@ -68,6 +100,7 @@ func (c *Consumer) process(ctx context.Context, evt domain.OutboxEvent) {
 	}
 	if !isNew {
 		c.logger.Debug().Str("event_id", evt.EventID.String()).Msg("duplicate event skipped")
+		c.updateOffset(ctx, evt.SequenceNumber)
 		return
 	}
 
@@ -75,6 +108,7 @@ func (c *Consumer) process(ctx context.Context, evt domain.OutboxEvent) {
 	handler, ok := c.handlers[evt.EventType]
 	if !ok {
 		c.logger.Warn().Str("event_type", evt.EventType).Msg("no handler for event type, skipping")
+		c.updateOffset(ctx, evt.SequenceNumber)
 		return
 	}
 
@@ -88,6 +122,17 @@ func (c *Consumer) process(ctx context.Context, evt domain.OutboxEvent) {
 			c.logger.Error().Err(dlqErr).
 				Str("event_id", evt.EventID.String()).
 				Msg("failed to insert into DLQ")
+		}
+	}
+
+	c.updateOffset(ctx, evt.SequenceNumber)
+}
+
+func (c *Consumer) updateOffset(ctx context.Context, seq int64) {
+	if seq > c.lastProcessedSeq {
+		c.lastProcessedSeq = seq
+		if err := c.repo.UpsertConsumerOffset(ctx, c.consumerGroup, seq); err != nil {
+			c.logger.Error().Err(err).Int64("sequence", seq).Msg("failed to update consumer offset")
 		}
 	}
 }

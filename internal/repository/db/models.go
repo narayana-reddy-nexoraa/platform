@@ -59,6 +59,12 @@ func (ns NullExecutionStatus) Value() (driver.Value, error) {
 	return string(ns.ExecutionStatus), nil
 }
 
+type ConsumerOffset struct {
+	ConsumerGroup    string
+	LastProcessedSeq int64
+	UpdatedAt        pgtype.Timestamptz
+}
+
 type DeadLetterEvent struct {
 	ID            uuid.UUID
 	EventID       uuid.UUID

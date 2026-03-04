@@ -132,6 +132,12 @@ func (m *mockRepo) DeleteDLQEvent(ctx context.Context, id uuid.UUID) error {
 func (m *mockRepo) CountDLQEvents(ctx context.Context, consumerGroup string) (int64, error) {
 	return 0, nil
 }
+func (m *mockRepo) GetConsumerOffset(ctx context.Context, consumerGroup string) (int64, error) {
+	return 0, nil
+}
+func (m *mockRepo) UpsertConsumerOffset(ctx context.Context, consumerGroup string, lastProcessedSeq int64) error {
+	return nil
+}
 
 func newTestService(repo *mockRepo) *ExecutionService {
 	logger := zerolog.Nop()

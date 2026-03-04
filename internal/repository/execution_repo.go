@@ -53,6 +53,10 @@ type ExecutionRepository interface {
 	ListDLQEvents(ctx context.Context, consumerGroup string, limit, offset int32) ([]domain.DeadLetterEvent, error)
 	DeleteDLQEvent(ctx context.Context, id uuid.UUID) error
 	CountDLQEvents(ctx context.Context, consumerGroup string) (int64, error)
+
+	// Consumer offset tracking
+	GetConsumerOffset(ctx context.Context, consumerGroup string) (int64, error)
+	UpsertConsumerOffset(ctx context.Context, consumerGroup string, lastProcessedSeq int64) error
 }
 
 // PostgresExecutionRepository implements ExecutionRepository using PostgreSQL via sqlc.
@@ -731,6 +735,32 @@ func (r *PostgresExecutionRepository) DeleteDLQEvent(ctx context.Context, id uui
 // CountDLQEvents returns the number of dead letter events for a consumer group.
 func (r *PostgresExecutionRepository) CountDLQEvents(ctx context.Context, consumerGroup string) (int64, error) {
 	return r.queries.CountDLQEvents(ctx, consumerGroup)
+}
+
+// ---------------------------------------------------------------------------
+// Consumer offset tracking
+// ---------------------------------------------------------------------------
+
+// GetConsumerOffset returns the last processed sequence number for a consumer group.
+// Returns 0 if no offset has been recorded yet.
+func (r *PostgresExecutionRepository) GetConsumerOffset(ctx context.Context, consumerGroup string) (int64, error) {
+	row, err := r.queries.GetConsumerOffset(ctx, consumerGroup)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return row.LastProcessedSeq, nil
+}
+
+// UpsertConsumerOffset updates the last processed sequence number for a consumer group.
+// Uses GREATEST to ensure the offset only moves forward.
+func (r *PostgresExecutionRepository) UpsertConsumerOffset(ctx context.Context, consumerGroup string, lastProcessedSeq int64) error {
+	return r.queries.UpsertConsumerOffset(ctx, db.UpsertConsumerOffsetParams{
+		ConsumerGroup:    consumerGroup,
+		LastProcessedSeq: lastProcessedSeq,
+	})
 }
 
 // ---------------------------------------------------------------------------
