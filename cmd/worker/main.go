@@ -44,7 +44,7 @@ func main() {
 	// Wire dependencies
 	repo := repository.NewPostgresExecutionRepository(pool)
 	svc := service.NewExecutionService(repo, int32(cfg.LeaseDurationSeconds), int32(cfg.ClaimBatchSize), logger)
-	claimer := worker.NewClaimer(svc, cfg.WorkerID, logger)
+	claimer := worker.NewClaimer(svc, repo, cfg.WorkerID, logger)
 	reaper := worker.NewReaper(svc, logger)
 
 	// Start claim loop
