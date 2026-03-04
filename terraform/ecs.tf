@@ -34,6 +34,7 @@ resource "aws_ecs_task_definition" "api" {
       name      = "${var.project_name}-api"
       image     = "${aws_ecr_repository.main.repository_url}:latest"
       essential = true
+      command   = ["/bin/api"]
 
       portMappings = [
         {
@@ -45,7 +46,7 @@ resource "aws_ecs_task_definition" "api" {
       environment = [
         {
           name  = "DATABASE_URL"
-          value = "postgres://postgres:${var.db_password}@${aws_db_instance.main.endpoint}/execution_engine?sslmode=require"
+          value = "postgres://postgres:${urlencode(var.db_password)}@${aws_db_instance.main.endpoint}/execution_engine?sslmode=require"
         },
         {
           name  = "PORT"
@@ -89,6 +90,7 @@ resource "aws_ecs_task_definition" "worker" {
       name      = "${var.project_name}-worker"
       image     = "${aws_ecr_repository.main.repository_url}:latest"
       essential = true
+      command   = ["/bin/worker"]
 
       portMappings = [
         {
@@ -100,7 +102,7 @@ resource "aws_ecs_task_definition" "worker" {
       environment = [
         {
           name  = "DATABASE_URL"
-          value = "postgres://postgres:${var.db_password}@${aws_db_instance.main.endpoint}/execution_engine?sslmode=require"
+          value = "postgres://postgres:${urlencode(var.db_password)}@${aws_db_instance.main.endpoint}/execution_engine?sslmode=require"
         },
         {
           name  = "HEALTH_PORT"
@@ -148,7 +150,7 @@ resource "aws_ecs_task_definition" "migrate" {
       command = [
         "/bin/migrate",
         "-path", "/migrations",
-        "-database", "postgres://postgres:${var.db_password}@${aws_db_instance.main.endpoint}/execution_engine?sslmode=require",
+        "-database", "postgres://postgres:${urlencode(var.db_password)}@${aws_db_instance.main.endpoint}/execution_engine?sslmode=require",
         "up"
       ]
 
