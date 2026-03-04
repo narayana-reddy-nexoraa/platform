@@ -104,6 +104,18 @@ func (q *Queries) CompleteExecution(ctx context.Context, arg CompleteExecutionPa
 	return i, err
 }
 
+const countActiveExecutions = `-- name: CountActiveExecutions :one
+SELECT COUNT(*) FROM executions
+WHERE status IN ('CLAIMED', 'RUNNING')
+`
+
+func (q *Queries) CountActiveExecutions(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveExecutions)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countExecutions = `-- name: CountExecutions :one
 SELECT COUNT(*) FROM executions
 WHERE tenant_id = $1
@@ -117,18 +129,6 @@ type CountExecutionsParams struct {
 
 func (q *Queries) CountExecutions(ctx context.Context, arg CountExecutionsParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countExecutions, arg.TenantID, arg.Status)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const countActiveExecutions = `-- name: CountActiveExecutions :one
-SELECT COUNT(*) FROM executions
-WHERE status IN ('CLAIMED', 'RUNNING')
-`
-
-func (q *Queries) CountActiveExecutions(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countActiveExecutions)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -247,7 +247,9 @@ func (q *Queries) FailExecution(ctx context.Context, arg FailExecutionParams) (E
 }
 
 const findClaimableExecutions = `-- name: FindClaimableExecutions :many
-SELECT execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after FROM executions
+SELECT execution_id, tenant_id, status, attempt_count, max_attempts,
+       locked_by, lock_expires_at, version, retry_after, created_at, updated_at
+FROM executions
 WHERE status IN ('CREATED', 'FAILED')
   AND (locked_by IS NULL OR lock_expires_at < NOW())
   AND attempt_count < max_attempts
@@ -256,33 +258,41 @@ ORDER BY created_at ASC
 LIMIT $1
 `
 
-func (q *Queries) FindClaimableExecutions(ctx context.Context, limit int32) ([]Execution, error) {
+type FindClaimableExecutionsRow struct {
+	ExecutionID   uuid.UUID
+	TenantID      uuid.UUID
+	Status        ExecutionStatus
+	AttemptCount  int32
+	MaxAttempts   int32
+	LockedBy      pgtype.Text
+	LockExpiresAt pgtype.Timestamptz
+	Version       int32
+	RetryAfter    pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
+func (q *Queries) FindClaimableExecutions(ctx context.Context, limit int32) ([]FindClaimableExecutionsRow, error) {
 	rows, err := q.db.Query(ctx, findClaimableExecutions, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Execution{}
+	items := []FindClaimableExecutionsRow{}
 	for rows.Next() {
-		var i Execution
+		var i FindClaimableExecutionsRow
 		if err := rows.Scan(
 			&i.ExecutionID,
 			&i.TenantID,
-			&i.IdempotencyKey,
 			&i.Status,
 			&i.AttemptCount,
 			&i.MaxAttempts,
 			&i.LockedBy,
 			&i.LockExpiresAt,
-			&i.LastHeartbeatAt,
-			&i.ErrorCode,
-			&i.ErrorMessage,
-			&i.Payload,
-			&i.PayloadHash,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.Version,
 			&i.RetryAfter,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -295,7 +305,9 @@ func (q *Queries) FindClaimableExecutions(ctx context.Context, limit int32) ([]E
 }
 
 const findExpiredLeases = `-- name: FindExpiredLeases :many
-SELECT execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after FROM executions
+SELECT execution_id, tenant_id, status, attempt_count, max_attempts,
+       locked_by, lock_expires_at, version, retry_after, created_at, updated_at
+FROM executions
 WHERE locked_by IS NOT NULL
   AND lock_expires_at < NOW()
   AND status IN ('CLAIMED', 'RUNNING')
@@ -303,33 +315,41 @@ ORDER BY lock_expires_at ASC
 LIMIT $1
 `
 
-func (q *Queries) FindExpiredLeases(ctx context.Context, limit int32) ([]Execution, error) {
+type FindExpiredLeasesRow struct {
+	ExecutionID   uuid.UUID
+	TenantID      uuid.UUID
+	Status        ExecutionStatus
+	AttemptCount  int32
+	MaxAttempts   int32
+	LockedBy      pgtype.Text
+	LockExpiresAt pgtype.Timestamptz
+	Version       int32
+	RetryAfter    pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
+func (q *Queries) FindExpiredLeases(ctx context.Context, limit int32) ([]FindExpiredLeasesRow, error) {
 	rows, err := q.db.Query(ctx, findExpiredLeases, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Execution{}
+	items := []FindExpiredLeasesRow{}
 	for rows.Next() {
-		var i Execution
+		var i FindExpiredLeasesRow
 		if err := rows.Scan(
 			&i.ExecutionID,
 			&i.TenantID,
-			&i.IdempotencyKey,
 			&i.Status,
 			&i.AttemptCount,
 			&i.MaxAttempts,
 			&i.LockedBy,
 			&i.LockExpiresAt,
-			&i.LastHeartbeatAt,
-			&i.ErrorCode,
-			&i.ErrorMessage,
-			&i.Payload,
-			&i.PayloadHash,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.Version,
 			&i.RetryAfter,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

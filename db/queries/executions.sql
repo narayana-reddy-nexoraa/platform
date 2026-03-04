@@ -29,7 +29,9 @@ WHERE tenant_id = $1
   AND (sqlc.narg('status')::execution_status IS NULL OR status = sqlc.narg('status')::execution_status);
 
 -- name: FindClaimableExecutions :many
-SELECT * FROM executions
+SELECT execution_id, tenant_id, status, attempt_count, max_attempts,
+       locked_by, lock_expires_at, version, retry_after, created_at, updated_at
+FROM executions
 WHERE status IN ('CREATED', 'FAILED')
   AND (locked_by IS NULL OR lock_expires_at < NOW())
   AND attempt_count < max_attempts
@@ -91,7 +93,9 @@ WHERE execution_id = $1
 RETURNING *;
 
 -- name: FindExpiredLeases :many
-SELECT * FROM executions
+SELECT execution_id, tenant_id, status, attempt_count, max_attempts,
+       locked_by, lock_expires_at, version, retry_after, created_at, updated_at
+FROM executions
 WHERE locked_by IS NOT NULL
   AND lock_expires_at < NOW()
   AND status IN ('CLAIMED', 'RUNNING')

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/narayana-platform/execution-engine/internal/config"
 	"github.com/narayana-platform/execution-engine/internal/domain"
+	"github.com/narayana-platform/execution-engine/internal/handler"
 	"github.com/narayana-platform/execution-engine/internal/metrics"
 	"github.com/narayana-platform/execution-engine/internal/repository"
 	"github.com/narayana-platform/execution-engine/internal/service"
@@ -32,7 +34,16 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to parse database config")
+	}
+	poolCfg.MaxConns = int32(cfg.DBMaxConns)
+	poolCfg.MinConns = int32(cfg.DBMinConns)
+	poolCfg.MaxConnLifetime = cfg.DBMaxConnLifetime
+	poolCfg.MaxConnIdleTime = cfg.DBMaxConnIdleTime
+
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to create connection pool")
 	}
@@ -75,6 +86,19 @@ func main() {
 		logger.Info().Str("addr", ":9090").Msg("metrics server starting")
 		if err := metricsSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error().Err(err).Msg("metrics server failed")
+		}
+	}()
+
+	// Health check server on configurable port (default :8081)
+	healthHandler := handler.NewHealthHandler(pool)
+	healthSrv := &http.Server{
+		Addr:    fmt.Sprintf(":%s", cfg.HealthPort),
+		Handler: healthHandler.NetHTTPHandler(),
+	}
+	go func() {
+		logger.Info().Str("addr", ":"+cfg.HealthPort).Msg("health server starting")
+		if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error().Err(err).Msg("health server failed")
 		}
 	}()
 

@@ -35,7 +35,16 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to parse database config")
+	}
+	poolCfg.MaxConns = int32(cfg.DBMaxConns)
+	poolCfg.MinConns = int32(cfg.DBMinConns)
+	poolCfg.MaxConnLifetime = cfg.DBMaxConnLifetime
+	poolCfg.MaxConnIdleTime = cfg.DBMaxConnIdleTime
+
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to create connection pool")
 	}
@@ -61,10 +70,9 @@ func main() {
 	router.Use(middleware.CorrelationID())
 	router.Use(middleware.RequestLogger(logger))
 
-	// Health endpoint (no tenant required)
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-	})
+	// Health endpoints (no tenant required)
+	healthHandler := handler.NewHealthHandler(pool)
+	healthHandler.RegisterRoutes(router)
 
 	// Prometheus metrics endpoint
 	router.GET("/metrics", gin.WrapH(metrics.Handler()))
