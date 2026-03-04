@@ -137,7 +137,7 @@ Captures events that failed handler processing. Indexed by `consumer_group` and 
 | Name | Columns | Condition | Purpose |
 |------|---------|-----------|---------|
 | `idx_dlq_consumer_group` | `(consumer_group, created_at DESC)` | — | List DLQ events per group |
-| `idx_dlq_event_id` | `(event_id)` | — | Lookup by original event |
+| `idx_dlq_event_id` | `(event_id, consumer_group)` | UNIQUE | Lookup by original event, prevents duplicate DLQ entries |
 
 ### consumer_offsets
 

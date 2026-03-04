@@ -87,7 +87,9 @@ func (c *Consumer) process(ctx context.Context, evt domain.OutboxEvent) {
 		return
 	}
 
-	// Gap detection: warn if sequence jumps
+	// Gap detection: warn if sequence jumps relative to the high-water mark.
+	// Note: false positives are expected during normal out-of-order delivery
+	// (e.g., batch arrives as 3,1,2 — gap warning fires on 3 but 1,2 follow).
 	if c.lastProcessedSeq > 0 && evt.SequenceNumber > c.lastProcessedSeq+1 {
 		c.logger.Warn().
 			Int64("event_seq", evt.SequenceNumber).
@@ -141,7 +143,7 @@ func (c *Consumer) updateOffset(ctx context.Context, seq int64) {
 	}
 }
 
-// RegisterHandler overrides the handler for a specific event type. Used in tests.
+// RegisterHandler overrides the handler for a specific event type.
 func (c *Consumer) RegisterHandler(eventType string, handler EventHandler) {
 	c.handlers[eventType] = handler
 }

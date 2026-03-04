@@ -18,6 +18,36 @@ import (
 	"github.com/narayana-platform/execution-engine/internal/worker"
 )
 
+// pollProcessedCount polls until the processed_events count for a consumer group reaches the expected value.
+func pollProcessedCount(t *testing.T, ctx context.Context, group string, expected int64) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		var count int64
+		testPool.QueryRow(ctx, "SELECT COUNT(*) FROM processed_events WHERE consumer_group = $1", group).Scan(&count)
+		return count >= expected
+	}, 10*time.Second, 100*time.Millisecond, "expected %d processed events for group %s", expected, group)
+}
+
+// pollOutboxAllSent polls until all outbox events are marked as sent.
+func pollOutboxAllSent(t *testing.T, ctx context.Context) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		var unsent int64
+		testPool.QueryRow(ctx, "SELECT COUNT(*) FROM outbox_events WHERE sent = FALSE").Scan(&unsent)
+		return unsent == 0
+	}, 10*time.Second, 100*time.Millisecond, "all outbox events should be marked sent")
+}
+
+// pollDLQCount polls until the DLQ count for a consumer group reaches the expected value.
+func pollDLQCount(t *testing.T, ctx context.Context, group string, expected int64) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		var count int64
+		testPool.QueryRow(ctx, "SELECT COUNT(*) FROM dead_letter_events WHERE consumer_group = $1", group).Scan(&count)
+		return count >= expected
+	}, 10*time.Second, 100*time.Millisecond, "expected %d DLQ events for group %s", expected, group)
+}
+
 // TestReplay_OutOfOrderEvents verifies sequence tracking and replay guard.
 // Round 1 sends events out of order (seq 3, 1, 2) and expects all 3 to be
 // processed with the offset set to the highest sequence (3).
@@ -56,7 +86,8 @@ func TestReplay_OutOfOrderEvents(t *testing.T) {
 		consumer.Run(consumerCtx)
 		close(done)
 	}()
-	time.Sleep(2 * time.Second)
+
+	pollProcessedCount(t, ctx, "ooo-group", 3)
 	cancel()
 	<-done
 
@@ -83,7 +114,8 @@ func TestReplay_OutOfOrderEvents(t *testing.T) {
 		consumer2.Run(consumerCtx2)
 		close(done2)
 	}()
-	time.Sleep(2 * time.Second)
+	// Give the consumer time to process (or skip) the replayed event
+	time.Sleep(500 * time.Millisecond)
 	cancel2()
 	<-done2
 
@@ -128,7 +160,8 @@ func TestReplay_DLQCapture(t *testing.T) {
 		consumer.Run(consumerCtx)
 		close(done)
 	}()
-	time.Sleep(2 * time.Second)
+
+	pollDLQCount(t, ctx, "dlq-group", 1)
 	cancel()
 	<-done
 
@@ -188,7 +221,9 @@ func TestReplay_EventReplayFromOutbox(t *testing.T) {
 		consumer.Run(ctx1)
 		close(doneCons1)
 	}()
-	time.Sleep(4 * time.Second)
+
+	pollProcessedCount(t, ctx, "replay-group", 2)
+	pollOutboxAllSent(t, ctx)
 	cancel1()
 	<-done1
 	<-doneCons1
@@ -225,7 +260,11 @@ func TestReplay_EventReplayFromOutbox(t *testing.T) {
 		consumer2.Run(ctx2)
 		close(doneCons2)
 	}()
-	time.Sleep(4 * time.Second)
+
+	// Wait for publisher to re-send and consumer to process (or dedup)
+	pollOutboxAllSent(t, ctx)
+	// Small additional wait for consumer to finish processing the deduplicated events
+	time.Sleep(500 * time.Millisecond)
 	cancel2()
 	<-done2
 	<-doneCons2

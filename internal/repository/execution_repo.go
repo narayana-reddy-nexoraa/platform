@@ -53,6 +53,7 @@ type ExecutionRepository interface {
 	ListDLQEvents(ctx context.Context, consumerGroup string, limit, offset int32) ([]domain.DeadLetterEvent, error)
 	DeleteDLQEvent(ctx context.Context, id uuid.UUID) error
 	CountDLQEvents(ctx context.Context, consumerGroup string) (int64, error)
+	GetDLQEventByEventID(ctx context.Context, eventID uuid.UUID, consumerGroup string) (*domain.DeadLetterEvent, error)
 
 	// Consumer offset tracking
 	GetConsumerOffset(ctx context.Context, consumerGroup string) (int64, error)
@@ -735,6 +736,19 @@ func (r *PostgresExecutionRepository) DeleteDLQEvent(ctx context.Context, id uui
 // CountDLQEvents returns the number of dead letter events for a consumer group.
 func (r *PostgresExecutionRepository) CountDLQEvents(ctx context.Context, consumerGroup string) (int64, error) {
 	return r.queries.CountDLQEvents(ctx, consumerGroup)
+}
+
+// GetDLQEventByEventID returns a DLQ event by its original event ID and consumer group.
+func (r *PostgresExecutionRepository) GetDLQEventByEventID(ctx context.Context, eventID uuid.UUID, consumerGroup string) (*domain.DeadLetterEvent, error) {
+	row, err := r.queries.GetDLQEventByEventID(ctx, db.GetDLQEventByEventIDParams{
+		EventID:       eventID,
+		ConsumerGroup: consumerGroup,
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := toDLQDomain(row)
+	return &result, nil
 }
 
 // ---------------------------------------------------------------------------

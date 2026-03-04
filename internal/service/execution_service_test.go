@@ -132,6 +132,9 @@ func (m *mockRepo) DeleteDLQEvent(ctx context.Context, id uuid.UUID) error {
 func (m *mockRepo) CountDLQEvents(ctx context.Context, consumerGroup string) (int64, error) {
 	return 0, nil
 }
+func (m *mockRepo) GetDLQEventByEventID(ctx context.Context, eventID uuid.UUID, consumerGroup string) (*domain.DeadLetterEvent, error) {
+	return nil, nil
+}
 func (m *mockRepo) GetConsumerOffset(ctx context.Context, consumerGroup string) (int64, error) {
 	return 0, nil
 }
