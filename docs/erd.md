@@ -35,7 +35,37 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL DEFAULT NOW()"
     }
 
+    OUTBOX_EVENTS {
+        UUID event_id PK "DEFAULT gen_random_uuid()"
+        VARCHAR(100) aggregate_type "NOT NULL"
+        UUID aggregate_id "NOT NULL"
+        VARCHAR(100) event_type "NOT NULL"
+        JSONB payload "NOT NULL"
+        JSONB metadata "nullable"
+        BIGSERIAL sequence_number "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL DEFAULT NOW()"
+        TIMESTAMPTZ sent_at "nullable"
+        BOOLEAN sent "NOT NULL DEFAULT FALSE"
+    }
+
+    PROCESSED_EVENTS {
+        UUID event_id PK "NOT NULL"
+        VARCHAR(100) consumer_group PK "NOT NULL"
+        TIMESTAMPTZ processed_at "NOT NULL DEFAULT NOW()"
+    }
+
+    PROCESSING_LOG {
+        UUID log_id PK "DEFAULT gen_random_uuid()"
+        UUID execution_id FK "NOT NULL → executions"
+        VARCHAR(255) worker_id "NOT NULL"
+        VARCHAR(50) action "NOT NULL"
+        INTEGER attempt_number "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL DEFAULT NOW()"
+    }
+
     EXECUTIONS ||--o{ EXECUTION_TRANSITIONS : "has audit trail"
+    EXECUTIONS ||--o{ PROCESSING_LOG : "has processing audit"
+    OUTBOX_EVENTS ||--o| PROCESSED_EVENTS : "deduplication"
 ```
 
 ### Constraints
@@ -60,6 +90,28 @@ erDiagram
 ### Trigger
 
 `trg_executions_updated_at` — auto-updates `updated_at` column on every row modification.
+
+---
+
+## Outbox & Processing Tables
+
+### outbox_events Indexes
+
+| Name | Columns | Condition | Purpose |
+|------|---------|-----------|---------|
+| `idx_outbox_unsent` | `(sequence_number ASC)` | `WHERE sent = FALSE` | Publisher polling |
+| `idx_outbox_cleanup` | `(sent_at)` | `WHERE sent = TRUE` | Old event cleanup |
+| `idx_outbox_aggregate` | `(aggregate_type, aggregate_id, sequence_number)` | — | Aggregate event history |
+
+### processed_events
+
+Composite primary key `(event_id, consumer_group)` — ensures each event is processed exactly once per consumer group.
+
+### processing_log Indexes
+
+| Name | Columns | Condition | Purpose |
+|------|---------|-----------|---------|
+| `idx_processing_log_execution` | `(execution_id, created_at)` | — | Execution processing audit |
 
 ---
 
