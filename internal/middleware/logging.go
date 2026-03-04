@@ -5,6 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
+
+	"github.com/narayana-platform/execution-engine/internal/contextkeys"
 )
 
 // RequestLogger logs each HTTP request with structured fields.
@@ -15,14 +17,14 @@ func RequestLogger(logger zerolog.Logger) gin.HandlerFunc {
 		c.Next()
 
 		latency := time.Since(start)
-		correlationID, _ := c.Get(CorrelationIDKey)
+		correlationID := contextkeys.CorrelationIDFromContext(c.Request.Context())
 
 		logger.Info().
 			Str("method", c.Request.Method).
 			Str("path", c.Request.URL.Path).
 			Int("status", c.Writer.Status()).
 			Dur("latency", latency).
-			Str("correlation_id", correlationID.(string)).
+			Str("correlation_id", correlationID).
 			Str("client_ip", c.ClientIP()).
 			Msg("request completed")
 	}

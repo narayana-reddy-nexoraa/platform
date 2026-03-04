@@ -3,10 +3,11 @@ package middleware
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	"github.com/narayana-platform/execution-engine/internal/contextkeys"
 )
 
 const CorrelationIDHeader = "X-Correlation-ID"
-const CorrelationIDKey = "correlation_id"
 
 // CorrelationID extracts or generates a correlation ID for request tracing.
 func CorrelationID() gin.HandlerFunc {
@@ -16,7 +17,7 @@ func CorrelationID() gin.HandlerFunc {
 			correlationID = uuid.New().String()
 		}
 
-		c.Set(CorrelationIDKey, correlationID)
+		c.Request = c.Request.WithContext(contextkeys.WithCorrelationID(c.Request.Context(), correlationID))
 		c.Header(CorrelationIDHeader, correlationID)
 
 		c.Next()

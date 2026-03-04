@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 
+	"github.com/narayana-platform/execution-engine/internal/contextkeys"
 	"github.com/narayana-platform/execution-engine/internal/handler"
 )
 
@@ -14,10 +15,10 @@ func ErrorHandler(logger zerolog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if r := recover(); r != nil {
-				correlationID, _ := c.Get(CorrelationIDKey)
+				correlationID := contextkeys.CorrelationIDFromContext(c.Request.Context())
 				logger.Error().
 					Interface("panic", r).
-					Str("correlation_id", correlationID.(string)).
+					Str("correlation_id", correlationID).
 					Str("path", c.Request.URL.Path).
 					Msg("panic recovered")
 
