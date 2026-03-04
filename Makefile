@@ -1,6 +1,7 @@
 .PHONY: docker-up docker-down migrate-up migrate-down sqlc-generate \
        build-api build-worker run-api run-worker \
-       test test-unit test-integration test-load
+       test test-unit test-integration test-load \
+       docker-build docker-up-full docker-down-full
 
 # --- Infrastructure ---
 docker-up:
@@ -45,3 +46,13 @@ test-integration:
 
 test-load:
 	k6 run tests/k6/load_test.js
+
+# --- Docker Full Stack ---
+docker-build:
+	docker compose build
+
+docker-up-full:
+	docker compose up -d
+
+docker-down-full:
+	docker compose down -v
