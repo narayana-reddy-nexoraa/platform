@@ -25,6 +25,11 @@ type ExecutionRepository interface {
 	UpdateStatus(ctx context.Context, executionID uuid.UUID, status domain.ExecutionStatus, version int32) (*domain.Execution, error)
 	Complete(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error)
 	Fail(ctx context.Context, executionID uuid.UUID, errorCode, errorMessage string, version int32) (*domain.Execution, error)
+	SendHeartbeat(ctx context.Context, executionID uuid.UUID, leaseDuration int32, workerID string) (*domain.Execution, error)
+	FindExpiredLeases(ctx context.Context, limit int32) ([]domain.Execution, error)
+	Reclaim(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error)
+	Retry(ctx context.Context, executionID uuid.UUID, errorCode, errorMessage string, delayMs int64, version int32) (*domain.Execution, error)
+	InsertTransition(ctx context.Context, executionID uuid.UUID, fromStatus, toStatus domain.ExecutionStatus, triggeredBy, reason string) error
 }
 
 // PostgresExecutionRepository implements ExecutionRepository using PostgreSQL via sqlc.
@@ -219,6 +224,77 @@ func (r *PostgresExecutionRepository) Fail(ctx context.Context, executionID uuid
 	return &exec, nil
 }
 
+func (r *PostgresExecutionRepository) SendHeartbeat(ctx context.Context, executionID uuid.UUID, leaseDuration int32, workerID string) (*domain.Execution, error) {
+	row, err := r.queries.SendHeartbeat(ctx, db.SendHeartbeatParams{
+		ExecutionID: executionID,
+		Column2:     leaseDuration,
+		LockedBy:    pgtype.Text{String: workerID, Valid: true},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &domain.ErrLostLease{ExecutionID: executionID.String(), WorkerID: workerID}
+		}
+		return nil, err
+	}
+	exec := toDomain(row)
+	return &exec, nil
+}
+
+func (r *PostgresExecutionRepository) FindExpiredLeases(ctx context.Context, limit int32) ([]domain.Execution, error) {
+	rows, err := r.queries.FindExpiredLeases(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	executions := make([]domain.Execution, len(rows))
+	for i, row := range rows {
+		executions[i] = toDomain(row)
+	}
+	return executions, nil
+}
+
+func (r *PostgresExecutionRepository) Reclaim(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error) {
+	row, err := r.queries.ReclaimExecution(ctx, db.ReclaimExecutionParams{
+		ExecutionID: executionID,
+		Version:     version,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &domain.ErrOptimisticLock{ExecutionID: executionID.String()}
+		}
+		return nil, err
+	}
+	exec := toDomain(row)
+	return &exec, nil
+}
+
+func (r *PostgresExecutionRepository) Retry(ctx context.Context, executionID uuid.UUID, errorCode, errorMessage string, delayMs int64, version int32) (*domain.Execution, error) {
+	row, err := r.queries.RetryExecution(ctx, db.RetryExecutionParams{
+		ExecutionID:  executionID,
+		ErrorCode:    pgtype.Text{String: errorCode, Valid: true},
+		ErrorMessage: pgtype.Text{String: errorMessage, Valid: true},
+		Column4:      delayMs,
+		Version:      version,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &domain.ErrOptimisticLock{ExecutionID: executionID.String()}
+		}
+		return nil, err
+	}
+	exec := toDomain(row)
+	return &exec, nil
+}
+
+func (r *PostgresExecutionRepository) InsertTransition(ctx context.Context, executionID uuid.UUID, fromStatus, toStatus domain.ExecutionStatus, triggeredBy, reason string) error {
+	return r.queries.InsertTransition(ctx, db.InsertTransitionParams{
+		ExecutionID: executionID,
+		FromStatus:  db.ExecutionStatus(fromStatus),
+		ToStatus:    db.ExecutionStatus(toStatus),
+		TriggeredBy: triggeredBy,
+		Reason:      pgtype.Text{String: reason, Valid: reason != ""},
+	})
+}
+
 // toDomain converts a sqlc-generated db.Execution to a domain.Execution.
 // This is the only place where pgtype types are translated to standard Go types.
 func toDomain(row db.Execution) domain.Execution {
@@ -236,6 +312,7 @@ func toDomain(row db.Execution) domain.Execution {
 		ErrorMessage:    pgTextToStringPtr(row.ErrorMessage),
 		Payload:         json.RawMessage(row.Payload),
 		PayloadHash:     row.PayloadHash,
+		RetryAfter:      pgTimestamptzToTimePtr(row.RetryAfter),
 		CreatedAt:       pgTimestamptzToTime(row.CreatedAt),
 		UpdatedAt:       pgTimestamptzToTime(row.UpdatedAt),
 		Version:         row.Version,

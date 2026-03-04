@@ -21,6 +21,7 @@ var validTransitions = map[ExecutionStatus]map[ExecutionStatus]bool{
 		StatusCanceled: true,
 	},
 	StatusClaimed: {
+		StatusCreated:  true, // reaper reclaim
 		StatusRunning:  true,
 		StatusCanceled: true,
 		StatusTimedOut: true,
@@ -32,13 +33,16 @@ var validTransitions = map[ExecutionStatus]map[ExecutionStatus]bool{
 		StatusTimedOut:  true,
 	},
 	StatusFailed: {
-		StatusClaimed:  true, // retry: FAILED → CLAIMED
+		StatusCreated:  true, // retry re-queue
+		StatusClaimed:  true, // direct retry claim
 		StatusCanceled: true,
+	},
+	StatusTimedOut: {
+		StatusCreated: true, // retry re-queue
 	},
 	// Terminal states: no transitions out
 	StatusSucceeded: {},
 	StatusCanceled:  {},
-	StatusTimedOut:  {},
 }
 
 // CanTransitionTo checks if the transition from current to next is valid.

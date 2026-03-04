@@ -13,6 +13,7 @@ func TestCanTransitionTo_ValidTransitions(t *testing.T) {
 	}{
 		{StatusCreated, StatusClaimed},
 		{StatusCreated, StatusCanceled},
+		{StatusClaimed, StatusCreated},  // reaper reclaim
 		{StatusClaimed, StatusRunning},
 		{StatusClaimed, StatusCanceled},
 		{StatusClaimed, StatusTimedOut},
@@ -20,8 +21,10 @@ func TestCanTransitionTo_ValidTransitions(t *testing.T) {
 		{StatusRunning, StatusFailed},
 		{StatusRunning, StatusCanceled},
 		{StatusRunning, StatusTimedOut},
-		{StatusFailed, StatusClaimed}, // retry
+		{StatusFailed, StatusCreated},  // retry re-queue
+		{StatusFailed, StatusClaimed},  // direct retry claim
 		{StatusFailed, StatusCanceled},
+		{StatusTimedOut, StatusCreated}, // retry re-queue
 	}
 
 	for _, tc := range validCases {
@@ -41,9 +44,7 @@ func TestCanTransitionTo_InvalidTransitions(t *testing.T) {
 		{StatusSucceeded, StatusCreated},   // terminal state
 		{StatusSucceeded, StatusFailed},    // terminal state
 		{StatusCanceled, StatusCreated},    // terminal state
-		{StatusTimedOut, StatusCreated},    // terminal state
 		{StatusRunning, StatusCreated},     // can't go backwards
-		{StatusClaimed, StatusCreated},     // can't go backwards
 	}
 
 	for _, tc := range invalidCases {
@@ -56,12 +57,12 @@ func TestCanTransitionTo_InvalidTransitions(t *testing.T) {
 func TestIsTerminal(t *testing.T) {
 	assert.True(t, StatusSucceeded.IsTerminal())
 	assert.True(t, StatusCanceled.IsTerminal())
-	assert.True(t, StatusTimedOut.IsTerminal())
 
 	assert.False(t, StatusCreated.IsTerminal())
 	assert.False(t, StatusClaimed.IsTerminal())
 	assert.False(t, StatusRunning.IsTerminal())
 	assert.False(t, StatusFailed.IsTerminal())
+	assert.False(t, StatusTimedOut.IsTerminal())
 }
 
 func TestIsValidStatus(t *testing.T) {

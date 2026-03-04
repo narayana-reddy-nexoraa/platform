@@ -15,14 +15,19 @@ import (
 
 // mockRepo implements repository.ExecutionRepository for unit testing.
 type mockRepo struct {
-	createIdempotentFn func(ctx context.Context, tenantID uuid.UUID, idempotencyKey string, maxAttempts int32, payload json.RawMessage, payloadHash string) (*domain.Execution, bool, error)
-	getByIDFn          func(ctx context.Context, executionID, tenantID uuid.UUID) (*domain.Execution, error)
-	listFn             func(ctx context.Context, tenantID uuid.UUID, status *domain.ExecutionStatus, limit, offset int32) ([]domain.Execution, int64, error)
-	findClaimableFn    func(ctx context.Context, limit int32) ([]domain.Execution, error)
-	claimFn            func(ctx context.Context, executionID uuid.UUID, workerID string, leaseDuration int32, version int32) (*domain.Execution, error)
-	updateStatusFn     func(ctx context.Context, executionID uuid.UUID, status domain.ExecutionStatus, version int32) (*domain.Execution, error)
-	completeFn         func(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error)
-	failFn             func(ctx context.Context, executionID uuid.UUID, errorCode, errorMessage string, version int32) (*domain.Execution, error)
+	createIdempotentFn  func(ctx context.Context, tenantID uuid.UUID, idempotencyKey string, maxAttempts int32, payload json.RawMessage, payloadHash string) (*domain.Execution, bool, error)
+	getByIDFn           func(ctx context.Context, executionID, tenantID uuid.UUID) (*domain.Execution, error)
+	listFn              func(ctx context.Context, tenantID uuid.UUID, status *domain.ExecutionStatus, limit, offset int32) ([]domain.Execution, int64, error)
+	findClaimableFn     func(ctx context.Context, limit int32) ([]domain.Execution, error)
+	claimFn             func(ctx context.Context, executionID uuid.UUID, workerID string, leaseDuration int32, version int32) (*domain.Execution, error)
+	updateStatusFn      func(ctx context.Context, executionID uuid.UUID, status domain.ExecutionStatus, version int32) (*domain.Execution, error)
+	completeFn          func(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error)
+	failFn              func(ctx context.Context, executionID uuid.UUID, errorCode, errorMessage string, version int32) (*domain.Execution, error)
+	sendHeartbeatFn     func(ctx context.Context, executionID uuid.UUID, leaseDuration int32, workerID string) (*domain.Execution, error)
+	findExpiredLeasesFn func(ctx context.Context, limit int32) ([]domain.Execution, error)
+	reclaimFn           func(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error)
+	retryFn             func(ctx context.Context, executionID uuid.UUID, errorCode, errorMessage string, delayMs int64, version int32) (*domain.Execution, error)
+	insertTransitionFn  func(ctx context.Context, executionID uuid.UUID, fromStatus, toStatus domain.ExecutionStatus, triggeredBy, reason string) error
 }
 
 func (m *mockRepo) CreateIdempotent(ctx context.Context, tenantID uuid.UUID, idempotencyKey string, maxAttempts int32, payload json.RawMessage, payloadHash string) (*domain.Execution, bool, error) {
@@ -48,6 +53,36 @@ func (m *mockRepo) Complete(ctx context.Context, executionID uuid.UUID, version 
 }
 func (m *mockRepo) Fail(ctx context.Context, executionID uuid.UUID, errorCode, errorMessage string, version int32) (*domain.Execution, error) {
 	return m.failFn(ctx, executionID, errorCode, errorMessage, version)
+}
+func (m *mockRepo) SendHeartbeat(ctx context.Context, executionID uuid.UUID, leaseDuration int32, workerID string) (*domain.Execution, error) {
+	if m.sendHeartbeatFn != nil {
+		return m.sendHeartbeatFn(ctx, executionID, leaseDuration, workerID)
+	}
+	return nil, nil
+}
+func (m *mockRepo) FindExpiredLeases(ctx context.Context, limit int32) ([]domain.Execution, error) {
+	if m.findExpiredLeasesFn != nil {
+		return m.findExpiredLeasesFn(ctx, limit)
+	}
+	return nil, nil
+}
+func (m *mockRepo) Reclaim(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error) {
+	if m.reclaimFn != nil {
+		return m.reclaimFn(ctx, executionID, version)
+	}
+	return nil, nil
+}
+func (m *mockRepo) Retry(ctx context.Context, executionID uuid.UUID, errorCode, errorMessage string, delayMs int64, version int32) (*domain.Execution, error) {
+	if m.retryFn != nil {
+		return m.retryFn(ctx, executionID, errorCode, errorMessage, delayMs, version)
+	}
+	return nil, nil
+}
+func (m *mockRepo) InsertTransition(ctx context.Context, executionID uuid.UUID, fromStatus, toStatus domain.ExecutionStatus, triggeredBy, reason string) error {
+	if m.insertTransitionFn != nil {
+		return m.insertTransitionFn(ctx, executionID, fromStatus, toStatus, triggeredBy, reason)
+	}
+	return nil
 }
 
 func newTestService(repo *mockRepo) *ExecutionService {

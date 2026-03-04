@@ -65,3 +65,28 @@ type ErrMissingHeader struct {
 func (e *ErrMissingHeader) Error() string {
 	return fmt.Sprintf("missing required header: %s", e.Header)
 }
+
+// ErrLostLease indicates the worker's lease expired and was reclaimed.
+type ErrLostLease struct {
+	ExecutionID string
+	WorkerID    string
+}
+
+func (e *ErrLostLease) Error() string {
+	return fmt.Sprintf("lost lease on execution %s (worker %s)", e.ExecutionID, e.WorkerID)
+}
+
+// retryableErrors defines error codes that are safe to retry.
+var retryableErrors = map[string]bool{
+	"DOWNSTREAM_TIMEOUT":   true,
+	"DOWNSTREAM_5XX":       true,
+	"CONNECTION_REFUSED":   true,
+	"CONNECTION_RESET":     true,
+	"RESOURCE_EXHAUSTED":   true,
+	"DATABASE_UNAVAILABLE": true,
+}
+
+// IsRetryableError checks if an error code is transient and safe to retry.
+func IsRetryableError(code string) bool {
+	return retryableErrors[code]
+}

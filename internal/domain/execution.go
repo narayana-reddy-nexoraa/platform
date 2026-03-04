@@ -25,6 +25,7 @@ type Execution struct {
 	ErrorMessage   *string         `json:"error_message,omitempty"`
 	Payload        json.RawMessage `json:"payload"`
 	PayloadHash    string          `json:"payload_hash"`
+	RetryAfter     *time.Time      `json:"retry_after,omitempty"`
 	CreatedAt      time.Time       `json:"created_at"`
 	UpdatedAt      time.Time       `json:"updated_at"`
 	Version        int32           `json:"version"`
