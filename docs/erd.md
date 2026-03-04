@@ -18,10 +18,24 @@ erDiagram
         TEXT error_message "nullable"
         JSONB payload "NOT NULL DEFAULT {}"
         VARCHAR(64) payload_hash "NOT NULL — SHA-256"
+        TIMESTAMPTZ retry_after "nullable — earliest retry time"
         TIMESTAMPTZ created_at "NOT NULL DEFAULT NOW()"
         TIMESTAMPTZ updated_at "NOT NULL DEFAULT NOW()"
         INTEGER version "NOT NULL DEFAULT 1 — optimistic lock"
     }
+
+    EXECUTION_TRANSITIONS {
+        UUID transition_id PK "DEFAULT gen_random_uuid()"
+        UUID execution_id FK "NOT NULL → executions"
+        ENUM from_status "NOT NULL"
+        ENUM to_status "NOT NULL"
+        VARCHAR(255) triggered_by "NOT NULL — worker/reaper/system"
+        TEXT reason "nullable"
+        JSONB metadata "nullable"
+        TIMESTAMPTZ created_at "NOT NULL DEFAULT NOW()"
+    }
+
+    EXECUTIONS ||--o{ EXECUTION_TRANSITIONS : "has audit trail"
 ```
 
 ### Constraints
@@ -41,6 +55,7 @@ erDiagram
 | `idx_executions_claimable` | `(tenant_id, status, lock_expires_at)` | `WHERE status IN ('CREATED','FAILED')` | Worker claim queries |
 | `idx_executions_expired_leases` | `(lock_expires_at)` | `WHERE locked_by IS NOT NULL` | Dead worker lease reaper |
 | `idx_executions_tenant_status` | `(tenant_id, status, created_at DESC)` | — | API list/filter queries |
+| `idx_transitions_execution` | `(execution_id, created_at)` | — | Audit trail lookups |
 
 ### Trigger
 
@@ -58,6 +73,7 @@ stateDiagram-v2
     CREATED --> CANCELED : User cancels
 
     CLAIMED --> RUNNING : Worker starts processing
+    CLAIMED --> CREATED : Reaper reclaims expired lease
     CLAIMED --> CANCELED : User cancels
     CLAIMED --> TIMED_OUT : Lease expires
 
@@ -66,15 +82,20 @@ stateDiagram-v2
     RUNNING --> CANCELED : User cancels
     RUNNING --> TIMED_OUT : Heartbeat missed
 
-    FAILED --> CLAIMED : Retry (if attempts remain)
+    FAILED --> CREATED : Retry (retryable error + attempts remain)
+    FAILED --> CLAIMED : Legacy retry path
     FAILED --> CANCELED : User cancels
+
+    TIMED_OUT --> CREATED : Retry after timeout
 
     SUCCEEDED --> [*]
     CANCELED --> [*]
-    TIMED_OUT --> [*]
 ```
 
 ### Terminal States
 - **SUCCEEDED** — execution completed successfully
 - **CANCELED** — execution canceled by user
-- **TIMED_OUT** — execution timed out (no further retries)
+
+### Non-Terminal Failure States
+- **FAILED** — can be retried (→ CREATED) if error is retryable and attempts remain
+- **TIMED_OUT** — can be retried (→ CREATED) via reaper recovery
