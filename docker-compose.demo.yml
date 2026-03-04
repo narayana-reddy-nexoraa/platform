@@ -1,0 +1,80 @@
+services:
+  # Disable the default worker service by scaling to 0 replicas
+  worker:
+    deploy:
+      replicas: 0
+
+  worker-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["/bin/worker"]
+    environment:
+      - DATABASE_URL=postgres://narayana:narayana@postgres:5432/narayana?sslmode=disable
+      - WORKER_ID=worker-1
+      - HEALTH_PORT=8081
+      - FAILURE_RATE=0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["/bin/worker"]
+    environment:
+      - DATABASE_URL=postgres://narayana:narayana@postgres:5432/narayana?sslmode=disable
+      - WORKER_ID=worker-2
+      - HEALTH_PORT=8081
+      - FAILURE_RATE=0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker-3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["/bin/worker"]
+    environment:
+      - DATABASE_URL=postgres://narayana:narayana@postgres:5432/narayana?sslmode=disable
+      - WORKER_ID=worker-3
+      - HEALTH_PORT=8081
+      - FAILURE_RATE=0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker-4:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["/bin/worker"]
+    environment:
+      - DATABASE_URL=postgres://narayana:narayana@postgres:5432/narayana?sslmode=disable
+      - WORKER_ID=worker-4
+      - HEALTH_PORT=8081
+      - FAILURE_RATE=0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Override prometheus to use demo config that scrapes all 4 workers
+  prometheus:
+    volumes:
+      - ./deploy/prometheus.demo.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - api
+      - worker-1
+      - worker-2
+      - worker-3
+      - worker-4
