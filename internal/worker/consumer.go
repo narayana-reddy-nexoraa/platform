@@ -137,6 +137,11 @@ func (c *Consumer) updateOffset(ctx context.Context, seq int64) {
 	}
 }
 
+// RegisterHandler overrides the handler for a specific event type. Used in tests.
+func (c *Consumer) RegisterHandler(eventType string, handler EventHandler) {
+	c.handlers[eventType] = handler
+}
+
 func (c *Consumer) handleDefault(ctx context.Context, evt domain.OutboxEvent) error {
 	c.logger.Info().
 		Str("event_type", evt.EventType).
