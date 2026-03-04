@@ -76,4 +76,16 @@ type Execution struct {
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
 	Version         int32
+	RetryAfter      pgtype.Timestamptz
+}
+
+type ExecutionTransition struct {
+	TransitionID uuid.UUID
+	ExecutionID  uuid.UUID
+	FromStatus   ExecutionStatus
+	ToStatus     ExecutionStatus
+	TriggeredBy  string
+	Reason       pgtype.Text
+	Metadata     []byte
+	CreatedAt    pgtype.Timestamptz
 }

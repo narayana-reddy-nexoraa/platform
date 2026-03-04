@@ -33,6 +33,7 @@ SELECT * FROM executions
 WHERE status IN ('CREATED', 'FAILED')
   AND (locked_by IS NULL OR lock_expires_at < NOW())
   AND attempt_count < max_attempts
+  AND (retry_after IS NULL OR retry_after <= NOW())
 ORDER BY created_at ASC
 LIMIT $1;
 
@@ -77,4 +78,48 @@ SET status = 'FAILED',
     version = version + 1
 WHERE execution_id = $1
   AND version = $4
+RETURNING *;
+
+-- name: SendHeartbeat :one
+UPDATE executions
+SET lock_expires_at = NOW() + INTERVAL '1 second' * $2,
+    last_heartbeat_at = NOW(),
+    version = version + 1
+WHERE execution_id = $1
+  AND locked_by = $3
+  AND status IN ('CLAIMED', 'RUNNING')
+RETURNING *;
+
+-- name: FindExpiredLeases :many
+SELECT * FROM executions
+WHERE locked_by IS NOT NULL
+  AND lock_expires_at < NOW()
+  AND status IN ('CLAIMED', 'RUNNING')
+ORDER BY lock_expires_at ASC
+LIMIT $1;
+
+-- name: ReclaimExecution :one
+UPDATE executions
+SET status = 'CREATED',
+    locked_by = NULL,
+    lock_expires_at = NULL,
+    last_heartbeat_at = NULL,
+    version = version + 1
+WHERE execution_id = $1
+  AND version = $2
+  AND lock_expires_at < NOW()
+RETURNING *;
+
+-- name: RetryExecution :one
+UPDATE executions
+SET status = 'CREATED',
+    locked_by = NULL,
+    lock_expires_at = NULL,
+    last_heartbeat_at = NULL,
+    error_code = $2,
+    error_message = $3,
+    retry_after = NOW() + ($4 * INTERVAL '1 millisecond'),
+    version = version + 1
+WHERE execution_id = $1
+  AND version = $5
 RETURNING *;

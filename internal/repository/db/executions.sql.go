@@ -23,7 +23,7 @@ WHERE execution_id = $1
   AND version = $4
   AND (status IN ('CREATED', 'FAILED'))
   AND (locked_by IS NULL OR lock_expires_at < NOW())
-RETURNING execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version
+RETURNING execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after
 `
 
 type ClaimExecutionParams struct {
@@ -58,6 +58,7 @@ func (q *Queries) ClaimExecution(ctx context.Context, arg ClaimExecutionParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.RetryAfter,
 	)
 	return i, err
 }
@@ -70,7 +71,7 @@ SET status = 'SUCCEEDED',
     version = version + 1
 WHERE execution_id = $1
   AND version = $2
-RETURNING execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version
+RETURNING execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after
 `
 
 type CompleteExecutionParams struct {
@@ -98,6 +99,7 @@ func (q *Queries) CompleteExecution(ctx context.Context, arg CompleteExecutionPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.RetryAfter,
 	)
 	return i, err
 }
@@ -128,7 +130,7 @@ INSERT INTO executions (
     $1, $2, 'CREATED', 0, $3, $4, $5, 1
 )
 ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
-RETURNING execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version
+RETURNING execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after
 `
 
 type CreateExecutionParams struct {
@@ -165,6 +167,7 @@ func (q *Queries) CreateExecution(ctx context.Context, arg CreateExecutionParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.RetryAfter,
 	)
 	return i, err
 }
@@ -179,7 +182,7 @@ SET status = 'FAILED',
     version = version + 1
 WHERE execution_id = $1
   AND version = $4
-RETURNING execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version
+RETURNING execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after
 `
 
 type FailExecutionParams struct {
@@ -214,15 +217,17 @@ func (q *Queries) FailExecution(ctx context.Context, arg FailExecutionParams) (E
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.RetryAfter,
 	)
 	return i, err
 }
 
 const findClaimableExecutions = `-- name: FindClaimableExecutions :many
-SELECT execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version FROM executions
+SELECT execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after FROM executions
 WHERE status IN ('CREATED', 'FAILED')
   AND (locked_by IS NULL OR lock_expires_at < NOW())
   AND attempt_count < max_attempts
+  AND (retry_after IS NULL OR retry_after <= NOW())
 ORDER BY created_at ASC
 LIMIT $1
 `
@@ -253,6 +258,54 @@ func (q *Queries) FindClaimableExecutions(ctx context.Context, limit int32) ([]E
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Version,
+			&i.RetryAfter,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const findExpiredLeases = `-- name: FindExpiredLeases :many
+SELECT execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after FROM executions
+WHERE locked_by IS NOT NULL
+  AND lock_expires_at < NOW()
+  AND status IN ('CLAIMED', 'RUNNING')
+ORDER BY lock_expires_at ASC
+LIMIT $1
+`
+
+func (q *Queries) FindExpiredLeases(ctx context.Context, limit int32) ([]Execution, error) {
+	rows, err := q.db.Query(ctx, findExpiredLeases, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Execution{}
+	for rows.Next() {
+		var i Execution
+		if err := rows.Scan(
+			&i.ExecutionID,
+			&i.TenantID,
+			&i.IdempotencyKey,
+			&i.Status,
+			&i.AttemptCount,
+			&i.MaxAttempts,
+			&i.LockedBy,
+			&i.LockExpiresAt,
+			&i.LastHeartbeatAt,
+			&i.ErrorCode,
+			&i.ErrorMessage,
+			&i.Payload,
+			&i.PayloadHash,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+			&i.RetryAfter,
 		); err != nil {
 			return nil, err
 		}
@@ -265,7 +318,7 @@ func (q *Queries) FindClaimableExecutions(ctx context.Context, limit int32) ([]E
 }
 
 const getExecutionByID = `-- name: GetExecutionByID :one
-SELECT execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version FROM executions
+SELECT execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after FROM executions
 WHERE execution_id = $1 AND tenant_id = $2
 `
 
@@ -294,12 +347,13 @@ func (q *Queries) GetExecutionByID(ctx context.Context, arg GetExecutionByIDPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.RetryAfter,
 	)
 	return i, err
 }
 
 const getExecutionByTenantAndIdempotencyKey = `-- name: GetExecutionByTenantAndIdempotencyKey :one
-SELECT execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version FROM executions
+SELECT execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after FROM executions
 WHERE tenant_id = $1 AND idempotency_key = $2
 `
 
@@ -328,12 +382,13 @@ func (q *Queries) GetExecutionByTenantAndIdempotencyKey(ctx context.Context, arg
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.RetryAfter,
 	)
 	return i, err
 }
 
 const listExecutions = `-- name: ListExecutions :many
-SELECT execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version FROM executions
+SELECT execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after FROM executions
 WHERE tenant_id = $1
   AND ($4::execution_status IS NULL OR status = $4::execution_status)
 ORDER BY created_at DESC
@@ -378,6 +433,7 @@ func (q *Queries) ListExecutions(ctx context.Context, arg ListExecutionsParams) 
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Version,
+			&i.RetryAfter,
 		); err != nil {
 			return nil, err
 		}
@@ -389,13 +445,152 @@ func (q *Queries) ListExecutions(ctx context.Context, arg ListExecutionsParams) 
 	return items, nil
 }
 
+const reclaimExecution = `-- name: ReclaimExecution :one
+UPDATE executions
+SET status = 'CREATED',
+    locked_by = NULL,
+    lock_expires_at = NULL,
+    last_heartbeat_at = NULL,
+    version = version + 1
+WHERE execution_id = $1
+  AND version = $2
+  AND lock_expires_at < NOW()
+RETURNING execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after
+`
+
+type ReclaimExecutionParams struct {
+	ExecutionID uuid.UUID
+	Version     int32
+}
+
+func (q *Queries) ReclaimExecution(ctx context.Context, arg ReclaimExecutionParams) (Execution, error) {
+	row := q.db.QueryRow(ctx, reclaimExecution, arg.ExecutionID, arg.Version)
+	var i Execution
+	err := row.Scan(
+		&i.ExecutionID,
+		&i.TenantID,
+		&i.IdempotencyKey,
+		&i.Status,
+		&i.AttemptCount,
+		&i.MaxAttempts,
+		&i.LockedBy,
+		&i.LockExpiresAt,
+		&i.LastHeartbeatAt,
+		&i.ErrorCode,
+		&i.ErrorMessage,
+		&i.Payload,
+		&i.PayloadHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+		&i.RetryAfter,
+	)
+	return i, err
+}
+
+const retryExecution = `-- name: RetryExecution :one
+UPDATE executions
+SET status = 'CREATED',
+    locked_by = NULL,
+    lock_expires_at = NULL,
+    last_heartbeat_at = NULL,
+    error_code = $2,
+    error_message = $3,
+    retry_after = NOW() + ($4 * INTERVAL '1 millisecond'),
+    version = version + 1
+WHERE execution_id = $1
+  AND version = $5
+RETURNING execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after
+`
+
+type RetryExecutionParams struct {
+	ExecutionID  uuid.UUID
+	ErrorCode    pgtype.Text
+	ErrorMessage pgtype.Text
+	Column4      interface{}
+	Version      int32
+}
+
+func (q *Queries) RetryExecution(ctx context.Context, arg RetryExecutionParams) (Execution, error) {
+	row := q.db.QueryRow(ctx, retryExecution,
+		arg.ExecutionID,
+		arg.ErrorCode,
+		arg.ErrorMessage,
+		arg.Column4,
+		arg.Version,
+	)
+	var i Execution
+	err := row.Scan(
+		&i.ExecutionID,
+		&i.TenantID,
+		&i.IdempotencyKey,
+		&i.Status,
+		&i.AttemptCount,
+		&i.MaxAttempts,
+		&i.LockedBy,
+		&i.LockExpiresAt,
+		&i.LastHeartbeatAt,
+		&i.ErrorCode,
+		&i.ErrorMessage,
+		&i.Payload,
+		&i.PayloadHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+		&i.RetryAfter,
+	)
+	return i, err
+}
+
+const sendHeartbeat = `-- name: SendHeartbeat :one
+UPDATE executions
+SET lock_expires_at = NOW() + INTERVAL '1 second' * $2,
+    last_heartbeat_at = NOW(),
+    version = version + 1
+WHERE execution_id = $1
+  AND locked_by = $3
+  AND status IN ('CLAIMED', 'RUNNING')
+RETURNING execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after
+`
+
+type SendHeartbeatParams struct {
+	ExecutionID uuid.UUID
+	Column2     interface{}
+	LockedBy    pgtype.Text
+}
+
+func (q *Queries) SendHeartbeat(ctx context.Context, arg SendHeartbeatParams) (Execution, error) {
+	row := q.db.QueryRow(ctx, sendHeartbeat, arg.ExecutionID, arg.Column2, arg.LockedBy)
+	var i Execution
+	err := row.Scan(
+		&i.ExecutionID,
+		&i.TenantID,
+		&i.IdempotencyKey,
+		&i.Status,
+		&i.AttemptCount,
+		&i.MaxAttempts,
+		&i.LockedBy,
+		&i.LockExpiresAt,
+		&i.LastHeartbeatAt,
+		&i.ErrorCode,
+		&i.ErrorMessage,
+		&i.Payload,
+		&i.PayloadHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+		&i.RetryAfter,
+	)
+	return i, err
+}
+
 const updateExecutionStatus = `-- name: UpdateExecutionStatus :one
 UPDATE executions
 SET status = $2,
     version = version + 1
 WHERE execution_id = $1
   AND version = $3
-RETURNING execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version
+RETURNING execution_id, tenant_id, idempotency_key, status, attempt_count, max_attempts, locked_by, lock_expires_at, last_heartbeat_at, error_code, error_message, payload, payload_hash, created_at, updated_at, version, retry_after
 `
 
 type UpdateExecutionStatusParams struct {
@@ -424,6 +619,7 @@ func (q *Queries) UpdateExecutionStatus(ctx context.Context, arg UpdateExecution
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.RetryAfter,
 	)
 	return i, err
 }
