@@ -186,7 +186,7 @@ func (r *PostgresExecutionRepository) FindClaimable(ctx context.Context, limit i
 
 	executions := make([]domain.Execution, len(rows))
 	for i, row := range rows {
-		executions[i] = toDomain(row)
+		executions[i] = claimableRowToDomain(row)
 	}
 	return executions, nil
 }
@@ -279,7 +279,7 @@ func (r *PostgresExecutionRepository) FindExpiredLeases(ctx context.Context, lim
 	}
 	executions := make([]domain.Execution, len(rows))
 	for i, row := range rows {
-		executions[i] = toDomain(row)
+		executions[i] = expiredLeaseRowToDomain(row)
 	}
 	return executions, nil
 }
@@ -831,6 +831,43 @@ func toDLQDomain(row db.DeadLetterEvent) domain.DeadLetterEvent {
 		MaxAttempts:   row.MaxAttempts,
 		CreatedAt:     pgTimestamptzToTime(row.CreatedAt),
 		LastFailedAt:  pgTimestamptzToTime(row.LastFailedAt),
+	}
+}
+
+// claimableRowToDomain converts a FindClaimableExecutionsRow (reduced columns) to domain.Execution.
+// Omitted fields (Payload, PayloadHash, IdempotencyKey, ErrorCode, ErrorMessage, LastHeartbeatAt)
+// are left at their zero values since they are not needed for the claim hot path.
+func claimableRowToDomain(row db.FindClaimableExecutionsRow) domain.Execution {
+	return domain.Execution{
+		ExecutionID:   row.ExecutionID,
+		TenantID:      row.TenantID,
+		Status:        domain.ExecutionStatus(row.Status),
+		AttemptCount:  row.AttemptCount,
+		MaxAttempts:   row.MaxAttempts,
+		LockedBy:      pgTextToStringPtr(row.LockedBy),
+		LockExpiresAt: pgTimestamptzToTimePtr(row.LockExpiresAt),
+		RetryAfter:    pgTimestamptzToTimePtr(row.RetryAfter),
+		CreatedAt:     pgTimestamptzToTime(row.CreatedAt),
+		UpdatedAt:     pgTimestamptzToTime(row.UpdatedAt),
+		Version:       row.Version,
+	}
+}
+
+// expiredLeaseRowToDomain converts a FindExpiredLeasesRow (reduced columns) to domain.Execution.
+// Omitted fields are left at their zero values since they are not needed for the reaper hot path.
+func expiredLeaseRowToDomain(row db.FindExpiredLeasesRow) domain.Execution {
+	return domain.Execution{
+		ExecutionID:   row.ExecutionID,
+		TenantID:      row.TenantID,
+		Status:        domain.ExecutionStatus(row.Status),
+		AttemptCount:  row.AttemptCount,
+		MaxAttempts:   row.MaxAttempts,
+		LockedBy:      pgTextToStringPtr(row.LockedBy),
+		LockExpiresAt: pgTimestamptzToTimePtr(row.LockExpiresAt),
+		RetryAfter:    pgTimestamptzToTimePtr(row.RetryAfter),
+		CreatedAt:     pgTimestamptzToTime(row.CreatedAt),
+		UpdatedAt:     pgTimestamptzToTime(row.UpdatedAt),
+		Version:       row.Version,
 	}
 }
 
