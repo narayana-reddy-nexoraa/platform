@@ -122,6 +122,30 @@ func (q *Queries) CountExecutions(ctx context.Context, arg CountExecutionsParams
 	return count, err
 }
 
+const countActiveExecutions = `-- name: CountActiveExecutions :one
+SELECT COUNT(*) FROM executions
+WHERE status IN ('CLAIMED', 'RUNNING')
+`
+
+func (q *Queries) CountActiveExecutions(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveExecutions)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPendingExecutions = `-- name: CountPendingExecutions :one
+SELECT COUNT(*) FROM executions
+WHERE status = 'CREATED'
+`
+
+func (q *Queries) CountPendingExecutions(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countPendingExecutions)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createExecution = `-- name: CreateExecution :one
 INSERT INTO executions (
     tenant_id, idempotency_key, status, attempt_count, max_attempts,

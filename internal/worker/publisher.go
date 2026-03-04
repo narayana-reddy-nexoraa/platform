@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/narayana-platform/execution-engine/internal/domain"
+	"github.com/narayana-platform/execution-engine/internal/metrics"
 	"github.com/narayana-platform/execution-engine/internal/repository"
 )
 
@@ -52,6 +53,8 @@ func (p *Publisher) Run(ctx context.Context) {
 }
 
 func (p *Publisher) publish(ctx context.Context) {
+	start := time.Now()
+
 	events, err := p.repo.FetchUnsentEvents(ctx, p.batchSize)
 	if err != nil {
 		p.logger.Error().Err(err).Msg("failed to fetch unsent events")
@@ -76,6 +79,8 @@ func (p *Publisher) publish(ctx context.Context) {
 		if err := p.repo.MarkEventsSent(ctx, sentIDs); err != nil {
 			p.logger.Error().Err(err).Int("count", len(sentIDs)).Msg("failed to mark events as sent")
 		} else {
+			metrics.OutboxPublishDurationSeconds.Observe(time.Since(start).Seconds())
+			metrics.EventsPublishedTotal.Add(float64(len(sentIDs)))
 			p.logger.Debug().Int("count", len(sentIDs)).Msg("published events")
 		}
 	}

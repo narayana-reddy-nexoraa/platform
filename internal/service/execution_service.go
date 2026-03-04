@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/narayana-platform/execution-engine/internal/domain"
+	"github.com/narayana-platform/execution-engine/internal/metrics"
 	"github.com/narayana-platform/execution-engine/internal/repository"
 )
 
@@ -60,7 +61,11 @@ func (s *ExecutionService) CreateExecution(
 		return nil, false, &domain.ErrValidation{Field: "payload", Message: err.Error()}
 	}
 
-	return s.repo.CreateIdempotent(ctx, tenantID, idempotencyKey, maxAttempts, req.Payload, payloadHash)
+	exec, isNew, err := s.repo.CreateIdempotent(ctx, tenantID, idempotencyKey, maxAttempts, req.Payload, payloadHash)
+	if err == nil && isNew {
+		metrics.ExecutionsCreatedTotal.Inc()
+	}
+	return exec, isNew, err
 }
 
 // GetExecution retrieves an execution by ID, scoped to a tenant.

@@ -110,6 +110,14 @@ WHERE execution_id = $1
   AND lock_expires_at < NOW()
 RETURNING *;
 
+-- name: CountActiveExecutions :one
+SELECT COUNT(*) FROM executions
+WHERE status IN ('CLAIMED', 'RUNNING');
+
+-- name: CountPendingExecutions :one
+SELECT COUNT(*) FROM executions
+WHERE status = 'CREATED';
+
 -- name: RetryExecution :one
 UPDATE executions
 SET status = 'CREATED',

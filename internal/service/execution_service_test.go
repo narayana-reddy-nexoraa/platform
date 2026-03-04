@@ -102,6 +102,12 @@ func (m *mockRepo) ReclaimWithOutbox(ctx context.Context, executionID uuid.UUID,
 func (m *mockRepo) ClaimWithOutbox(ctx context.Context, executionID uuid.UUID, workerID string, leaseDuration int32, version int32) (*domain.Execution, error) {
 	return nil, nil
 }
+func (m *mockRepo) CountActiveExecutions(ctx context.Context) (int64, error) {
+	return 0, nil
+}
+func (m *mockRepo) CountPendingExecutions(ctx context.Context) (int64, error) {
+	return 0, nil
+}
 func (m *mockRepo) FetchUnsentEvents(ctx context.Context, limit int32) ([]domain.OutboxEvent, error) {
 	return nil, nil
 }

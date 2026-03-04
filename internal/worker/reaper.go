@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/narayana-platform/execution-engine/internal/metrics"
 	"github.com/narayana-platform/execution-engine/internal/service"
 )
 
@@ -67,6 +68,14 @@ func (r *Reaper) scan(ctx context.Context) {
 				Msg("reclaim failed (likely already reclaimed)")
 			continue
 		}
+
+		metrics.LeasesReclaimedTotal.Inc()
+
+		// If the execution has exhausted all attempts, count it as timed out
+		if exec.AttemptCount >= exec.MaxAttempts {
+			metrics.ExecutionsTimedOutTotal.Inc()
+		}
+
 		r.logger.Info().
 			Str("execution_id", exec.ExecutionID.String()).
 			Str("previous_worker", stringPtrOrEmpty(exec.LockedBy)).

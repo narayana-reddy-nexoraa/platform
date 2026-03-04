@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
+	"github.com/narayana-platform/execution-engine/internal/metrics"
 	"github.com/narayana-platform/execution-engine/internal/service"
 )
 
@@ -50,9 +51,13 @@ func (h *Heartbeat) Run(ctx context.Context, cancelFunc context.CancelFunc) {
 			h.stopped.Store(true)
 			return
 		case <-ticker.C:
+			hbStart := time.Now()
 			_, err := h.svc.SendHeartbeat(ctx, h.executionID, h.workerID)
+			metrics.HeartbeatDurationSeconds.Observe(time.Since(hbStart).Seconds())
+
 			if err != nil {
 				consecutiveFailures++
+				metrics.HeartbeatsTotal.WithLabelValues("failure").Inc()
 				h.logger.Warn().Err(err).
 					Int("consecutive_failures", consecutiveFailures).
 					Msg("heartbeat failed")
@@ -67,6 +72,7 @@ func (h *Heartbeat) Run(ctx context.Context, cancelFunc context.CancelFunc) {
 			}
 
 			consecutiveFailures = 0
+			metrics.HeartbeatsTotal.WithLabelValues("success").Inc()
 			h.logger.Debug().Msg("heartbeat sent")
 		}
 	}

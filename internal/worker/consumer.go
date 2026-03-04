@@ -2,10 +2,12 @@ package worker
 
 import (
 	"context"
+	"time"
 
 	"github.com/rs/zerolog"
 
 	"github.com/narayana-platform/execution-engine/internal/domain"
+	"github.com/narayana-platform/execution-engine/internal/metrics"
 	"github.com/narayana-platform/execution-engine/internal/repository"
 )
 
@@ -75,6 +77,8 @@ func (c *Consumer) Run(ctx context.Context) {
 }
 
 func (c *Consumer) process(ctx context.Context, evt domain.OutboxEvent) {
+	start := time.Now()
+
 	// Replay guard: skip events at or below the offset loaded from DB on startup.
 	// This prevents reprocessing old events after a restart. During live processing,
 	// out-of-order events are handled by the processed_events dedup table.
@@ -105,6 +109,7 @@ func (c *Consumer) process(ctx context.Context, evt domain.OutboxEvent) {
 		return
 	}
 	if !isNew {
+		metrics.EventsDeduplicatedTotal.Inc()
 		c.logger.Debug().Str("event_id", evt.EventID.String()).Msg("duplicate event skipped")
 		c.updateOffset(ctx, evt.SequenceNumber)
 		return
@@ -128,8 +133,15 @@ func (c *Consumer) process(ctx context.Context, evt domain.OutboxEvent) {
 			c.logger.Error().Err(dlqErr).
 				Str("event_id", evt.EventID.String()).
 				Msg("failed to insert into DLQ")
+		} else {
+			metrics.EventsDLQTotal.Inc()
 		}
 	}
+
+	// EventsProcessedTotal counts total throughput: both successfully handled
+	// events and those routed to the DLQ after handler failure.
+	metrics.EventsProcessedTotal.Inc()
+	metrics.ConsumerProcessingDurationSeconds.Observe(time.Since(start).Seconds())
 
 	c.updateOffset(ctx, evt.SequenceNumber)
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/narayana-platform/execution-engine/internal/config"
 	"github.com/narayana-platform/execution-engine/internal/domain"
+	"github.com/narayana-platform/execution-engine/internal/metrics"
 	"github.com/narayana-platform/execution-engine/internal/repository"
 	"github.com/narayana-platform/execution-engine/internal/service"
 	"github.com/narayana-platform/execution-engine/internal/worker"
@@ -55,11 +57,26 @@ func main() {
 	publisher := worker.NewPublisher(repo, eventChan, logger)
 	consumer := worker.NewConsumer(repo, eventChan, "default", logger)
 
-	// Start claim loop
+	// Gauge collector
+	gc := worker.NewGaugeCollector(repo, logger)
+
+	// Start background goroutines
 	go claimer.Run(ctx)
 	go reaper.Run(ctx)
 	go publisher.Run(ctx)
 	go consumer.Run(ctx)
+	go gc.Run(ctx)
+
+	// Expose Prometheus metrics on :9090
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("/metrics", metrics.Handler())
+	metricsSrv := &http.Server{Addr: ":9090", Handler: metricsMux}
+	go func() {
+		logger.Info().Str("addr", ":9090").Msg("metrics server starting")
+		if err := metricsSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error().Err(err).Msg("metrics server failed")
+		}
+	}()
 
 	logger.Info().Str("worker_id", cfg.WorkerID).Msg("worker started")
 

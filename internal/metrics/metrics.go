@@ -134,6 +134,15 @@ var latencyBuckets = []float64{
 	0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
 }
 
+// HTTPRequestDurationSeconds observes the duration of HTTP requests,
+// partitioned by method and status code.
+var HTTPRequestDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Namespace: namespace,
+	Name:      "http_request_duration_seconds",
+	Help:      "Duration of HTTP requests in seconds.",
+	Buckets:   latencyBuckets,
+}, []string{"method", "status"})
+
 // ExecutionDurationSeconds observes the total wall-clock time of an execution
 // from claim to terminal state (succeeded, failed, or timed out).
 var ExecutionDurationSeconds = promauto.NewHistogram(prometheus.HistogramOpts{

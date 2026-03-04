@@ -15,6 +15,7 @@ import (
 
 	"github.com/narayana-platform/execution-engine/internal/config"
 	"github.com/narayana-platform/execution-engine/internal/handler"
+	"github.com/narayana-platform/execution-engine/internal/metrics"
 	"github.com/narayana-platform/execution-engine/internal/middleware"
 	"github.com/narayana-platform/execution-engine/internal/repository"
 	"github.com/narayana-platform/execution-engine/internal/service"
@@ -64,6 +65,9 @@ func main() {
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+
+	// Prometheus metrics endpoint
+	router.GET("/metrics", gin.WrapH(metrics.Handler()))
 
 	// API v1 routes (tenant required)
 	v1 := router.Group("/api/v1")

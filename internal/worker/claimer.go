@@ -7,6 +7,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/narayana-platform/execution-engine/internal/domain"
+	"github.com/narayana-platform/execution-engine/internal/metrics"
 	"github.com/narayana-platform/execution-engine/internal/repository"
 	"github.com/narayana-platform/execution-engine/internal/service"
 )
@@ -51,7 +52,10 @@ func (cl *Claimer) Run(ctx context.Context) {
 
 // poll attempts to claim one execution and process it.
 func (cl *Claimer) poll(parentCtx context.Context) {
+	claimQueryStart := time.Now()
 	exec, err := cl.service.ClaimNextExecution(parentCtx, cl.workerID)
+	metrics.ClaimQueryDurationSeconds.Observe(time.Since(claimQueryStart).Seconds())
+
 	if err != nil {
 		if _, ok := err.(*domain.ErrClaimFailed); ok {
 			return
@@ -60,10 +64,15 @@ func (cl *Claimer) poll(parentCtx context.Context) {
 		return
 	}
 
+	metrics.ExecutionsClaimedTotal.Inc()
+	metrics.QueueWaitSeconds.Observe(time.Since(exec.CreatedAt).Seconds())
+
 	cl.logger.Info().
 		Str("execution_id", exec.ExecutionID.String()).
 		Int32("attempt", exec.AttemptCount).
 		Msg("claimed execution")
+
+	claimStart := time.Now()
 
 	// Transition to RUNNING
 	exec, err = cl.service.UpdateStatus(parentCtx, exec.ExecutionID, domain.StatusRunning, exec.Version)
@@ -99,6 +108,7 @@ func (cl *Claimer) poll(parentCtx context.Context) {
 	}
 
 	if processErr != nil {
+		metrics.ExecutionDurationSeconds.Observe(time.Since(claimStart).Seconds())
 		cl.handleFailure(parentCtx, exec, processErr)
 		return
 	}
@@ -109,6 +119,9 @@ func (cl *Claimer) poll(parentCtx context.Context) {
 		cl.logger.Error().Err(err).Str("execution_id", exec.ExecutionID.String()).Msg("failed to mark as SUCCEEDED")
 		return
 	}
+
+	metrics.ExecutionDurationSeconds.Observe(time.Since(claimStart).Seconds())
+	metrics.ExecutionsSucceededTotal.Inc()
 
 	// Write processing_log COMPLETED entry
 	if logErr := cl.repo.InsertProcessingLog(parentCtx, exec.ExecutionID, cl.workerID, "COMPLETED", exec.AttemptCount); logErr != nil {
@@ -141,6 +154,8 @@ func (cl *Claimer) handleFailure(ctx context.Context, exec *domain.Execution, pr
 		_, err := cl.service.RetryExecution(ctx, exec.ExecutionID, cl.workerID, errorCode, errorMessage, exec.AttemptCount, exec.Version)
 		if err != nil {
 			cl.logger.Error().Err(err).Str("execution_id", exec.ExecutionID.String()).Msg("failed to schedule retry")
+		} else {
+			metrics.ExecutionsRetriedTotal.Inc()
 		}
 		return
 	}
@@ -148,6 +163,8 @@ func (cl *Claimer) handleFailure(ctx context.Context, exec *domain.Execution, pr
 	_, err := cl.service.FailExecution(ctx, exec.ExecutionID, cl.workerID, errorCode, errorMessage, exec.Version)
 	if err != nil {
 		cl.logger.Error().Err(err).Str("execution_id", exec.ExecutionID.String()).Msg("failed to mark as FAILED")
+	} else {
+		metrics.ExecutionsFailedTotal.Inc()
 	}
 
 	// Write processing_log ABORTED entry for permanent failures

@@ -38,6 +38,10 @@ type ExecutionRepository interface {
 	ReclaimWithOutbox(ctx context.Context, executionID uuid.UUID, version int32) (*domain.Execution, error)
 	ClaimWithOutbox(ctx context.Context, executionID uuid.UUID, workerID string, leaseDuration int32, version int32) (*domain.Execution, error)
 
+	// Gauge / count queries
+	CountActiveExecutions(ctx context.Context) (int64, error)
+	CountPendingExecutions(ctx context.Context) (int64, error)
+
 	// Outbox operations
 	FetchUnsentEvents(ctx context.Context, limit int32) ([]domain.OutboxEvent, error)
 	MarkEventsSent(ctx context.Context, eventIDs []uuid.UUID) error
@@ -321,6 +325,20 @@ func (r *PostgresExecutionRepository) InsertTransition(ctx context.Context, exec
 		TriggeredBy: triggeredBy,
 		Reason:      pgtype.Text{String: reason, Valid: reason != ""},
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Gauge / count queries
+// ---------------------------------------------------------------------------
+
+// CountActiveExecutions returns the number of executions in CLAIMED or RUNNING state.
+func (r *PostgresExecutionRepository) CountActiveExecutions(ctx context.Context) (int64, error) {
+	return r.queries.CountActiveExecutions(ctx)
+}
+
+// CountPendingExecutions returns the number of executions in CREATED state.
+func (r *PostgresExecutionRepository) CountPendingExecutions(ctx context.Context) (int64, error) {
+	return r.queries.CountPendingExecutions(ctx)
 }
 
 // ---------------------------------------------------------------------------
