@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -19,23 +20,25 @@ const processDelay = 500 * time.Millisecond // simulated work
 
 // Claimer runs a background loop that claims and processes executions.
 type Claimer struct {
-	service  *service.ExecutionService
-	repo     repository.ExecutionRepository
-	workerID string
-	logger   zerolog.Logger
-	wg       *sync.WaitGroup
-	clock    clock.Clock
+	service     *service.ExecutionService
+	repo        repository.ExecutionRepository
+	workerID    string
+	logger      zerolog.Logger
+	wg          *sync.WaitGroup
+	clock       clock.Clock
+	failureRate float64
 }
 
 // NewClaimer creates a new claim loop worker.
-func NewClaimer(svc *service.ExecutionService, repo repository.ExecutionRepository, workerID string, logger zerolog.Logger, wg *sync.WaitGroup, clk clock.Clock) *Claimer {
+func NewClaimer(svc *service.ExecutionService, repo repository.ExecutionRepository, workerID string, logger zerolog.Logger, wg *sync.WaitGroup, clk clock.Clock, failureRate float64) *Claimer {
 	return &Claimer{
-		service:  svc,
-		repo:     repo,
-		workerID: workerID,
-		logger:   logger.With().Str("worker_id", workerID).Logger(),
-		wg:       wg,
-		clock:    clk,
+		service:     svc,
+		repo:        repo,
+		workerID:    workerID,
+		logger:      logger.With().Str("worker_id", workerID).Logger(),
+		wg:          wg,
+		clock:       clk,
+		failureRate: failureRate,
 	}
 }
 
@@ -187,6 +190,14 @@ func (cl *Claimer) process(ctx context.Context, exec *domain.Execution) error {
 	cl.logger.Info().
 		Str("execution_id", exec.ExecutionID.String()).
 		Msg("processing execution (simulated)")
+
+	// Failure injection for demo/testing
+	if cl.failureRate > 0 && rand.Float64() < cl.failureRate {
+		return &ExecutionError{
+			Code:    "PROCESSING_ERROR",
+			Message: "injected failure for testing",
+		}
+	}
 
 	select {
 	case <-time.After(processDelay):

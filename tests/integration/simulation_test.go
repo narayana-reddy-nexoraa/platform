@@ -85,7 +85,7 @@ func TestSimulation_MultiWorkerChaos(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		wCtx, wCancel := context.WithCancel(simCtx)
 		wID := fmt.Sprintf("worker-%d", i)
-		claimer := worker.NewClaimer(svc, repo, wID, logger, &wg, clk)
+		claimer := worker.NewClaimer(svc, repo, wID, logger, &wg, clk, 0.0)
 		go claimer.Run(wCtx)
 		workers[i] = workerCtx{cancel: wCancel, id: wID}
 	}
@@ -124,7 +124,7 @@ func TestSimulation_MultiWorkerChaos(t *testing.T) {
 				// Restart after 2 seconds.
 				time.Sleep(2 * time.Second)
 				newCtx, newCancel := context.WithCancel(simCtx)
-				claimer := worker.NewClaimer(svc, repo, workers[idx].id, logger, &wg, clk)
+				claimer := worker.NewClaimer(svc, repo, workers[idx].id, logger, &wg, clk, 0.0)
 				go claimer.Run(newCtx)
 				workers[idx] = workerCtx{cancel: newCancel, id: workers[idx].id}
 				t.Logf("CHAOS: restarted %s", workers[idx].id)
