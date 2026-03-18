@@ -1,8 +1,9 @@
 .PHONY: docker-up docker-down migrate-up migrate-down sqlc-generate \
-       build-api build-worker run-api run-worker \
+       build-api build-worker build-temporal-worker run-api run-worker \
        test test-unit test-integration test-load \
        docker-build docker-up-full docker-down-full \
-       deploy tf-plan tf-apply tf-destroy
+       deploy tf-plan tf-apply tf-destroy \
+       kafka-topics
 
 # --- Infrastructure ---
 docker-up:
@@ -28,6 +29,9 @@ build-api:
 
 build-worker:
 	go build -o bin/worker ./cmd/worker
+
+build-temporal-worker:
+	go build -o bin/temporal-worker ./cmd/temporal-worker
 
 # --- Run ---
 run-api:
@@ -70,3 +74,7 @@ tf-apply:
 
 tf-destroy:
 	cd terraform && terraform destroy
+
+# --- Kafka ---
+kafka-topics:
+	docker compose exec kafka kafka-topics --bootstrap-server localhost:29092 --list

@@ -57,6 +57,8 @@ services:
     environment:
       - DATABASE_URL=postgres://narayana:narayana@postgres:5432/narayana?sslmode=disable
       - HEALTH_PORT=8081
+      - KAFKA_BROKERS=kafka:29092
+      - EVENT_BUS=channel
     depends_on:
       postgres:
         condition: service_healthy
@@ -98,13 +100,15 @@ services:
     container_name: nexoraa-temporal-worker
     ports:
       - "8082:8081"
-      - "9092:9090"
+      - "9093:9090"
     environment:
       - DATABASE_URL=postgres://narayana:narayana@postgres:5432/narayana?sslmode=disable
       - TEMPORAL_HOST=temporal:7233
       - TEMPORAL_NAMESPACE=default
       - HEALTH_PORT=8081
       - USE_TEMPORAL=true
+      - KAFKA_BROKERS=kafka:29092
+      - EVENT_BUS=channel
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,6 +116,46 @@ services:
         condition: service_completed_successfully
       temporal:
         condition: service_started
+
+  kafka:
+    image: confluentinc/cp-kafka:7.7.0
+    container_name: nexoraa-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft mode (no ZooKeeper)
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      CLUSTER_ID: nexoraa-kafka-cluster-001
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 | grep ApiVersion"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: nexoraa-kafka-ui
+    ports:
+      - "8089:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: nexoraa-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    depends_on:
+      kafka:
+        condition: service_healthy
 
   prometheus:
     image: prom/prometheus:v2.51.0
