@@ -25,6 +25,16 @@ type Config struct {
 	DBMaxConnIdleTime        time.Duration
 	ShutdownTimeoutSeconds   int
 	FailureRate              float64
+
+	// Temporal configuration
+	TemporalHost      string
+	TemporalNamespace string
+	UseTemporal       bool
+
+	// Kafka configuration (Sprint 2)
+	KafkaBrokers string
+	KafkaGroupID string
+	EventBus     string // "channel" or "kafka"
 }
 
 func Load() (*Config, error) {
@@ -46,6 +56,16 @@ func Load() (*Config, error) {
 		DBMaxConnIdleTime:        getEnvDuration("DB_MAX_CONN_IDLE_TIME", 5*time.Minute),
 		ShutdownTimeoutSeconds:   getEnvInt("SHUTDOWN_TIMEOUT_SECONDS", 30),
 		FailureRate:              getEnvFloat("FAILURE_RATE", 0.0),
+
+		// Temporal
+		TemporalHost:      getEnv("TEMPORAL_HOST", "localhost:7233"),
+		TemporalNamespace: getEnv("TEMPORAL_NAMESPACE", "nexoraa"),
+		UseTemporal:       getEnvBool("USE_TEMPORAL", false),
+
+		// Kafka (Sprint 2)
+		KafkaBrokers: getEnv("KAFKA_BROKERS", "localhost:9092"),
+		KafkaGroupID: getEnv("KAFKA_GROUP_ID", "nexoraa-platform"),
+		EventBus:     getEnv("EVENT_BUS", "channel"),
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -80,6 +100,18 @@ func getEnvFloat(key string, fallback float64) float64 {
 		return fallback
 	}
 	parsed, err := strconv.ParseFloat(val, 64)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	val, ok := os.LookupEnv(key)
+	if !ok {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(val)
 	if err != nil {
 		return fallback
 	}

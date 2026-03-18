@@ -12,6 +12,52 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AgentStepType string
+
+const (
+	AgentStepTypeINTAKE         AgentStepType = "INTAKE"
+	AgentStepTypeDATARETRIEVAL  AgentStepType = "DATA_RETRIEVAL"
+	AgentStepTypeCLASSIFICATION AgentStepType = "CLASSIFICATION"
+	AgentStepTypeDECISIONING    AgentStepType = "DECISIONING"
+	AgentStepTypeEXECUTION      AgentStepType = "EXECUTION"
+	AgentStepTypeAUDIT          AgentStepType = "AUDIT"
+)
+
+func (e *AgentStepType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AgentStepType(s)
+	case string:
+		*e = AgentStepType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AgentStepType: %T", src)
+	}
+	return nil
+}
+
+type NullAgentStepType struct {
+	AgentStepType AgentStepType
+	Valid         bool // Valid is true if AgentStepType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAgentStepType) Scan(value interface{}) error {
+	if value == nil {
+		ns.AgentStepType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AgentStepType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAgentStepType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AgentStepType), nil
+}
+
 type ExecutionStatus string
 
 const (
@@ -57,6 +103,160 @@ func (ns NullExecutionStatus) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.ExecutionStatus), nil
+}
+
+type HitlDecision string
+
+const (
+	HitlDecisionPENDING   HitlDecision = "PENDING"
+	HitlDecisionAPPROVED  HitlDecision = "APPROVED"
+	HitlDecisionREJECTED  HitlDecision = "REJECTED"
+	HitlDecisionESCALATED HitlDecision = "ESCALATED"
+)
+
+func (e *HitlDecision) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = HitlDecision(s)
+	case string:
+		*e = HitlDecision(s)
+	default:
+		return fmt.Errorf("unsupported scan type for HitlDecision: %T", src)
+	}
+	return nil
+}
+
+type NullHitlDecision struct {
+	HitlDecision HitlDecision
+	Valid        bool // Valid is true if HitlDecision is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullHitlDecision) Scan(value interface{}) error {
+	if value == nil {
+		ns.HitlDecision, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.HitlDecision.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullHitlDecision) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.HitlDecision), nil
+}
+
+type SopExecutionStatus string
+
+const (
+	SopExecutionStatusPENDING     SopExecutionStatus = "PENDING"
+	SopExecutionStatusRUNNING     SopExecutionStatus = "RUNNING"
+	SopExecutionStatusWAITINGHITL SopExecutionStatus = "WAITING_HITL"
+	SopExecutionStatusCOMPLETED   SopExecutionStatus = "COMPLETED"
+	SopExecutionStatusFAILED      SopExecutionStatus = "FAILED"
+	SopExecutionStatusCANCELED    SopExecutionStatus = "CANCELED"
+	SopExecutionStatusESCALATED   SopExecutionStatus = "ESCALATED"
+)
+
+func (e *SopExecutionStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SopExecutionStatus(s)
+	case string:
+		*e = SopExecutionStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SopExecutionStatus: %T", src)
+	}
+	return nil
+}
+
+type NullSopExecutionStatus struct {
+	SopExecutionStatus SopExecutionStatus
+	Valid              bool // Valid is true if SopExecutionStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSopExecutionStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.SopExecutionStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SopExecutionStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSopExecutionStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SopExecutionStatus), nil
+}
+
+type SopIndustry string
+
+const (
+	SopIndustryFINANCIALSERVICES SopIndustry = "FINANCIAL_SERVICES"
+	SopIndustryINSURANCE         SopIndustry = "INSURANCE"
+	SopIndustryHEALTHCARE        SopIndustry = "HEALTHCARE"
+	SopIndustryHOSPITALOPS       SopIndustry = "HOSPITAL_OPS"
+	SopIndustryLIFESCIENCES      SopIndustry = "LIFE_SCIENCES"
+	SopIndustryMANUFACTURING     SopIndustry = "MANUFACTURING"
+)
+
+func (e *SopIndustry) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SopIndustry(s)
+	case string:
+		*e = SopIndustry(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SopIndustry: %T", src)
+	}
+	return nil
+}
+
+type NullSopIndustry struct {
+	SopIndustry SopIndustry
+	Valid       bool // Valid is true if SopIndustry is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSopIndustry) Scan(value interface{}) error {
+	if value == nil {
+		ns.SopIndustry, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SopIndustry.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSopIndustry) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SopIndustry), nil
+}
+
+type AuditTrail struct {
+	AuditID        uuid.UUID
+	SopExecutionID uuid.UUID
+	SopID          string
+	TenantID       uuid.UUID
+	StepID         string
+	AgentType      AgentStepType
+	Action         string
+	InputHash      string
+	OutputHash     string
+	ModelUsed      pgtype.Text
+	LatencyMs      int64
+	TokensUsed     pgtype.Int4
+	ComplianceTags []string
+	CreatedAt      pgtype.Timestamptz
 }
 
 type ConsumerOffset struct {
@@ -112,6 +312,26 @@ type ExecutionTransition struct {
 	CreatedAt    pgtype.Timestamptz
 }
 
+type HitlRequest struct {
+	RequestID          uuid.UUID
+	SopExecutionID     uuid.UUID
+	SopID              string
+	TenantID           uuid.UUID
+	StepID             string
+	StepName           string
+	Decision           HitlDecision
+	DecidedBy          pgtype.Text
+	DecisionReason     pgtype.Text
+	DecidedAt          pgtype.Timestamptz
+	Deadline           pgtype.Timestamptz
+	Payload            []byte
+	TemporalWorkflowID string
+	TemporalRunID      string
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+	Version            int32
+}
+
 type OutboxEvent struct {
 	EventID        uuid.UUID
 	AggregateType  string
@@ -138,4 +358,22 @@ type ProcessingLog struct {
 	Action        string
 	AttemptNumber int32
 	CreatedAt     pgtype.Timestamptz
+}
+
+type SopExecution struct {
+	SopExecutionID     uuid.UUID
+	SopID              string
+	TenantID           uuid.UUID
+	Industry           SopIndustry
+	CurrentStep        string
+	Status             SopExecutionStatus
+	InputPayload       []byte
+	OutputPayload      []byte
+	TemporalWorkflowID pgtype.Text
+	TemporalRunID      pgtype.Text
+	StartedAt          pgtype.Timestamptz
+	CompletedAt        pgtype.Timestamptz
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+	Version            int32
 }

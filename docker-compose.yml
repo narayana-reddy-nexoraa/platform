@@ -63,6 +63,56 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    container_name: nexoraa-temporal
+    ports:
+      - "7233:7233"
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=narayana
+      - POSTGRES_PWD=narayana
+      - POSTGRES_SEEDS=postgres
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    container_name: nexoraa-temporal-ui
+    ports:
+      - "8088:8080"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    depends_on:
+      - temporal
+
+  temporal-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["/bin/temporal-worker"]
+    container_name: nexoraa-temporal-worker
+    ports:
+      - "8082:8081"
+      - "9092:9090"
+    environment:
+      - DATABASE_URL=postgres://narayana:narayana@postgres:5432/narayana?sslmode=disable
+      - TEMPORAL_HOST=temporal:7233
+      - TEMPORAL_NAMESPACE=default
+      - HEALTH_PORT=8081
+      - USE_TEMPORAL=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_started
+
   prometheus:
     image: prom/prometheus:v2.51.0
     ports:
