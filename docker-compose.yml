@@ -157,6 +157,16 @@ services:
       kafka:
         condition: service_healthy
 
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    container_name: nexoraa-ui
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
   prometheus:
     image: prom/prometheus:v2.51.0
     ports:

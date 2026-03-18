@@ -57,6 +57,11 @@ type TopicManager struct {
 	logger zerolog.Logger
 }
 
+// NewAdminClient creates a bare Kafka client suitable for admin operations.
+func NewAdminClient(cfg KafkaConfig) (*kgo.Client, error) {
+	return kgo.NewClient(kgo.SeedBrokers(cfg.Brokers...))
+}
+
 // NewTopicManager creates a TopicManager from an existing Kafka client.
 func NewTopicManager(client *kgo.Client, logger zerolog.Logger) *TopicManager {
 	return &TopicManager{

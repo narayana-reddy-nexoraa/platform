@@ -19,6 +19,9 @@ import (
 	"github.com/narayana-platform/execution-engine/internal/middleware"
 	"github.com/narayana-platform/execution-engine/internal/repository"
 	"github.com/narayana-platform/execution-engine/internal/service"
+	"github.com/narayana-platform/execution-engine/internal/sop/registry"
+	nexoraatemporal "github.com/narayana-platform/execution-engine/internal/temporal"
+	temporalclient "go.temporal.io/sdk/client"
 )
 
 func main() {
@@ -56,10 +59,37 @@ func main() {
 	}
 	logger.Info().Msg("database connection established")
 
-	// Wire dependencies
+	// Wire v1 dependencies
 	repo := repository.NewPostgresExecutionRepository(pool)
 	svc := service.NewExecutionService(repo, int32(cfg.LeaseDurationSeconds), int32(cfg.ClaimBatchSize), logger)
 	h := handler.NewExecutionHandler(svc)
+
+	// Wire v2 dependencies (SOP, HITL, Audit)
+	sopRepo := repository.NewPostgresSOPRepository(pool)
+	hitlRepo := repository.NewPostgresHITLRepository(pool)
+	auditRepo := repository.NewPostgresAuditRepository(pool)
+	sopRegistry := registry.NewSOPRegistry()
+
+	// Temporal client (optional — API works without it, just won't start workflows)
+	var tc temporalclient.Client
+	if cfg.UseTemporal {
+		var err error
+		tc, err = nexoraatemporal.NewClient(cfg.TemporalHost, cfg.TemporalNamespace, logger)
+		if err != nil {
+			logger.Warn().Err(err).Msg("failed to create temporal client — SOP execution will create DB records but not start workflows")
+			tc = nil
+		} else {
+			defer tc.Close()
+		}
+	}
+
+	sopSvc := service.NewSOPService(sopRepo, sopRegistry, tc, logger)
+	hitlSvc := service.NewHITLService(hitlRepo, tc, logger)
+	auditSvc := service.NewAuditService(auditRepo, logger)
+
+	sopHandler := handler.NewSOPHandler(sopSvc)
+	hitlHandler := handler.NewHITLHandler(hitlSvc)
+	auditHandler := handler.NewAuditHandler(auditSvc)
 
 	// Gin router
 	gin.SetMode(gin.ReleaseMode)
@@ -84,6 +114,24 @@ func main() {
 		v1.POST("/executions", h.CreateExecution)
 		v1.GET("/executions/:id", h.GetExecution)
 		v1.GET("/executions", h.ListExecutions)
+	}
+
+	// API v2 routes (SOP, HITL, Audit — tenant required)
+	v2 := router.Group("/api/v2")
+	v2.Use(middleware.TenantExtractor())
+	{
+		// SOP executions
+		v2.POST("/sops/:id/execute", sopHandler.StartExecution)
+		v2.GET("/sop-executions/:id", sopHandler.GetExecution)
+		v2.GET("/sop-executions", sopHandler.ListExecutions)
+
+		// HITL approvals
+		v2.GET("/hitl/pending", hitlHandler.ListPending)
+		v2.GET("/hitl/:id", hitlHandler.GetRequest)
+		v2.POST("/hitl/:id/decide", hitlHandler.Decide)
+
+		// Audit trail
+		v2.GET("/audit/executions/:id", auditHandler.GetAuditTrail)
 	}
 
 	// HTTP server with graceful shutdown
