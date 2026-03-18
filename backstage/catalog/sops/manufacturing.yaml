@@ -1,0 +1,129 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-mfg-01-work-orders
+  title: "MFG-01: Production Work Order Management and Scheduling"
+  description: >
+    Translate demand into capacity-feasible work orders, optimize production
+    schedule, manage material availability, and track through completion.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: MFG-01
+    nexoraa.ai/industry: MANUFACTURING
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: VP Manufacturing / Director of Production Planning
+  tags:
+    - manufacturing
+    - work-orders
+    - iso-9001
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/mfg-01
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-mfg-02-spc-quality
+  title: "MFG-02: Statistical Process Control and Quality Alert Management"
+  description: >
+    Monitor real-time SPC data from production, detect out-of-control conditions,
+    generate quality alerts, and initiate containment actions.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: MFG-02
+    nexoraa.ai/industry: MANUFACTURING
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: VP Quality / Director of Manufacturing Quality
+  tags:
+    - manufacturing
+    - spc-quality
+    - iso-9001
+    - fda-cgmp
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/mfg-02
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-mfg-03-predictive-maint
+  title: "MFG-03: Predictive Maintenance Work Order Generation"
+  description: >
+    Analyze equipment sensor data, predict failures, generate proactive
+    maintenance work orders to prevent unplanned downtime.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: MFG-03
+    nexoraa.ai/industry: MANUFACTURING
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: Director of Maintenance / VP Operations
+  tags:
+    - manufacturing
+    - predictive-maintenance
+    - iso-9001
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/mfg-03
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-mfg-04-supplier-quality
+  title: "MFG-04: Supplier Quality Incoming Inspection and Non-Conformance Management"
+  description: >
+    Inspect incoming materials against specifications, manage non-conformances,
+    track supplier quality performance, and initiate corrective actions.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: MFG-04
+    nexoraa.ai/industry: MANUFACTURING
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: Director of Supplier Quality / VP Quality
+  tags:
+    - manufacturing
+    - supplier-quality
+    - iso-9001
+    - fda-cgmp
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/mfg-04
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api

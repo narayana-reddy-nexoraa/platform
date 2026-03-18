@@ -1,0 +1,23 @@
+---
+# Dev Kafka Cluster Claim
+# Provisions a 3-broker MSK cluster in us-east-1 for development.
+apiVersion: messaging.nexoraa.io/v1alpha1
+kind: KafkaCluster
+metadata:
+  name: nexoraa-dev-kafka
+  namespace: nexoraa-system
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+    environment: dev
+spec:
+  compositionSelector:
+    matchLabels:
+      provider: aws
+      crossplane.io/xrd: xkafkaclusters.messaging.nexoraa.io
+  region: us-east-1
+  brokerCount: 3
+  instanceType: kafka.m5.large
+  storageGB: 500
+  writeConnectionSecretToRef:
+    name: nexoraa-dev-kafka-conn

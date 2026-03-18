@@ -1,0 +1,24 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: nexoraa-temporal-worker
+  description: Temporal workflow worker that executes the 6-step SOP agent pattern (intake, data retrieval, classification, decisioning, execution, audit) across all 25 SOPs.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - go
+    - temporal
+    - workflow
+    - worker
+  links:
+    - url: http://localhost:8233
+      title: Temporal Web UI
+      icon: dashboard
+spec:
+  type: service
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - resource:default/nexoraa-kafka

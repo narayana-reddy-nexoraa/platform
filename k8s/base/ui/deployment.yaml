@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexoraa-ui
+  namespace: nexoraa-system
+  labels:
+    app: nexoraa-ui
+    app.kubernetes.io/name: nexoraa-ui
+    app.kubernetes.io/component: ui
+    app.kubernetes.io/part-of: nexoraa-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nexoraa-ui
+  template:
+    metadata:
+      labels:
+        app: nexoraa-ui
+        app.kubernetes.io/name: nexoraa-ui
+        app.kubernetes.io/component: ui
+        app.kubernetes.io/part-of: nexoraa-platform
+    spec:
+      containers:
+        - name: ui
+          image: nexoraa/ui:latest
+          ports:
+            - containerPort: 80
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 20

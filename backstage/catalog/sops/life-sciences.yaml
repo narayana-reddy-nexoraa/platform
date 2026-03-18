@@ -1,0 +1,133 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-ls-01-pharmacovigilance
+  title: "LS-01: Pharmacovigilance Case Intake and Triage"
+  description: >
+    Receive ICSRs via any channel, deduplicate, triage seriousness/expectedness,
+    code with MedDRA, enter into safety database, route to medical reviewer
+    within regulatory deadlines (7-day/15-day).
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: LS-01
+    nexoraa.ai/industry: LIFE_SCIENCES
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: Head of Global Pharmacovigilance / Drug Safety Director
+  tags:
+    - life-sciences
+    - pharmacovigilance
+    - 21-cfr-part-11
+    - gvp
+    - gxp
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/ls-01
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-ls-02-product-complaints
+  title: "LS-02: Product Complaint Handling and Triage"
+  description: >
+    Receive product quality complaints, triage for severity and reportability,
+    initiate investigation, and report to regulatory authorities as required.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: LS-02
+    nexoraa.ai/industry: LIFE_SCIENCES
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: VP Quality / Director of Quality Assurance
+  tags:
+    - life-sciences
+    - product-complaints
+    - 21-cfr-part-11
+    - gxp
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/ls-02
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-ls-03-regulatory-submission
+  title: "LS-03: Regulatory Submission Content Assembly Support"
+  description: >
+    Assemble regulatory submission packages (eCTD modules), verify document
+    completeness, manage publishing lifecycle through submission.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: LS-03
+    nexoraa.ai/industry: LIFE_SCIENCES
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: VP Regulatory Affairs / Head of Regulatory Operations
+  tags:
+    - life-sciences
+    - regulatory-submission
+    - 21-cfr-part-11
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/ls-03
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-ls-04-quality-capa
+  title: "LS-04: Quality Event Triage (Deviation and CAPA Initiation)"
+  description: >
+    Receive quality events (deviations, OOS results, audit observations), triage
+    severity, initiate CAPA when warranted, track through closure.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: LS-04
+    nexoraa.ai/industry: LIFE_SCIENCES
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: VP Quality / Director of Quality Systems
+  tags:
+    - life-sciences
+    - quality-capa
+    - 21-cfr-part-11
+    - gxp
+    - fda-cgmp
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/ls-04
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api

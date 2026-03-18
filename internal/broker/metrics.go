@@ -55,3 +55,72 @@ var kafkaTopicsCreatedTotal = promauto.NewCounter(prometheus.CounterOpts{
 	Name:      "topics_created_total",
 	Help:      "Total number of Kafka topics created by the topic manager.",
 })
+
+// --- Circuit breaker metrics ---
+
+var circuitBreakerStateGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: metricsNamespace,
+	Subsystem: "circuit_breaker",
+	Name:      "state",
+	Help:      "Current circuit breaker state (1 = active for that state).",
+}, []string{"state"})
+
+var circuitBreakerTransitionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+	Namespace: metricsNamespace,
+	Subsystem: "circuit_breaker",
+	Name:      "transitions_total",
+	Help:      "Total circuit breaker state transitions.",
+}, []string{"to_state"})
+
+// --- Adaptive consumer metrics ---
+
+var adaptiveRateGauge = promauto.NewGauge(prometheus.GaugeOpts{
+	Namespace: metricsNamespace,
+	Subsystem: "adaptive",
+	Name:      "current_rate",
+	Help:      "Current event consumption rate (events/sec).",
+})
+
+var adaptiveMovingAvgGauge = promauto.NewGauge(prometheus.GaugeOpts{
+	Namespace: metricsNamespace,
+	Subsystem: "adaptive",
+	Name:      "moving_average_rate",
+	Help:      "Moving average of event consumption rate (events/sec).",
+})
+
+var adaptiveThrottledGauge = promauto.NewGauge(prometheus.GaugeOpts{
+	Namespace: metricsNamespace,
+	Subsystem: "adaptive",
+	Name:      "throttled",
+	Help:      "Whether the adaptive consumer is in throttled mode (1=throttled, 0=normal).",
+})
+
+var adaptiveSpikeDetectedTotal = promauto.NewCounter(prometheus.CounterOpts{
+	Namespace: metricsNamespace,
+	Subsystem: "adaptive",
+	Name:      "spikes_detected_total",
+	Help:      "Total number of traffic spikes detected.",
+})
+
+var adaptiveShedTotal = promauto.NewCounter(prometheus.CounterOpts{
+	Namespace: metricsNamespace,
+	Subsystem: "adaptive",
+	Name:      "events_shed_total",
+	Help:      "Total events dropped due to burst buffer overflow (load shedding).",
+})
+
+// --- Consumer lag metrics ---
+
+var consumerLagGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: metricsNamespace,
+	Subsystem: "kafka",
+	Name:      "consumer_lag",
+	Help:      "Consumer group lag per topic/partition.",
+}, []string{"topic", "partition", "group"})
+
+var consumerTotalLagGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: metricsNamespace,
+	Subsystem: "kafka",
+	Name:      "consumer_total_lag",
+	Help:      "Total consumer group lag across all partitions.",
+}, []string{"group"})

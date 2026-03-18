@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nexoraa-ui
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/narayana-reddy-nexoraa/platform.git
+    targetRevision: main
+    path: k8s/base/ui
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nexoraa-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

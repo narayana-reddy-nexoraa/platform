@@ -1,0 +1,698 @@
+---
+# XNetwork — CompositeResourceDefinition
+# Defines a portable VPC network abstraction for the Nexoraa platform.
+# Creates a fully functional VPC with 3 AZs, public/private subnets, and NAT.
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xnetworks.network.nexoraa.io
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+spec:
+  group: network.nexoraa.io
+  names:
+    kind: XNetwork
+    plural: xnetworks
+  claimNames:
+    kind: Network
+    plural: networks
+  connectionSecretKeys:
+    - vpcId
+    - privateSubnetIds
+    - publicSubnetIds
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - region
+                - cidrBlock
+              properties:
+                region:
+                  type: string
+                  description: AWS region for the VPC.
+                  enum:
+                    - us-east-1
+                    - us-east-2
+                    - us-west-2
+                    - eu-west-1
+                    - eu-central-1
+                    - ap-southeast-1
+                cidrBlock:
+                  type: string
+                  description: CIDR block for the VPC (e.g. 10.0.0.0/16).
+                  pattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+---
+# Composition — wires XNetwork claims to AWS VPC, Subnets, IGW, NAT, Route Tables
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xnetwork-aws
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+    crossplane.io/xrd: xnetworks.network.nexoraa.io
+    provider: aws
+spec:
+  compositeTypeRef:
+    apiVersion: network.nexoraa.io/v1alpha1
+    kind: XNetwork
+  writeConnectionSecretsToNamespace: nexoraa-system
+  resources:
+    # =====================================================================
+    #  VPC
+    # =====================================================================
+    - name: vpc
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: VPC
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            cidrBlock: 10.0.0.0/16
+            enableDnsSupport: true
+            enableDnsHostnames: true
+            tags:
+              Name: nexoraa-vpc
+              Platform: nexoraa
+              ManagedBy: crossplane
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.cidrBlock
+          toFieldPath: spec.forProvider.cidrBlock
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.tags.Name
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "nexoraa-%s-vpc"
+
+    # =====================================================================
+    #  Internet Gateway
+    # =====================================================================
+    - name: internet-gateway
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: InternetGateway
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: nexoraa-igw
+              Platform: nexoraa
+              ManagedBy: crossplane
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    # =====================================================================
+    #  Public Subnets (3 AZs)
+    # =====================================================================
+    - name: public-subnet-az1
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Subnet
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+            access: public
+            zone: az1
+        spec:
+          forProvider:
+            region: us-east-1
+            availabilityZone: us-east-1a
+            cidrBlock: 10.0.0.0/20
+            mapPublicIpOnLaunch: true
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: nexoraa-public-az1
+              Platform: nexoraa
+              ManagedBy: crossplane
+              kubernetes.io/role/elb: "1"
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.availabilityZone
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%sa"
+
+    - name: public-subnet-az2
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Subnet
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+            access: public
+            zone: az2
+        spec:
+          forProvider:
+            region: us-east-1
+            availabilityZone: us-east-1b
+            cidrBlock: 10.0.16.0/20
+            mapPublicIpOnLaunch: true
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: nexoraa-public-az2
+              Platform: nexoraa
+              ManagedBy: crossplane
+              kubernetes.io/role/elb: "1"
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.availabilityZone
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%sb"
+
+    - name: public-subnet-az3
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Subnet
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+            access: public
+            zone: az3
+        spec:
+          forProvider:
+            region: us-east-1
+            availabilityZone: us-east-1c
+            cidrBlock: 10.0.32.0/20
+            mapPublicIpOnLaunch: true
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: nexoraa-public-az3
+              Platform: nexoraa
+              ManagedBy: crossplane
+              kubernetes.io/role/elb: "1"
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.availabilityZone
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%sc"
+
+    # =====================================================================
+    #  Private Subnets (3 AZs)
+    # =====================================================================
+    - name: private-subnet-az1
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Subnet
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+            access: private
+            zone: az1
+        spec:
+          forProvider:
+            region: us-east-1
+            availabilityZone: us-east-1a
+            cidrBlock: 10.0.128.0/20
+            mapPublicIpOnLaunch: false
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: nexoraa-private-az1
+              Platform: nexoraa
+              ManagedBy: crossplane
+              kubernetes.io/role/internal-elb: "1"
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.availabilityZone
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%sa"
+
+    - name: private-subnet-az2
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Subnet
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+            access: private
+            zone: az2
+        spec:
+          forProvider:
+            region: us-east-1
+            availabilityZone: us-east-1b
+            cidrBlock: 10.0.144.0/20
+            mapPublicIpOnLaunch: false
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: nexoraa-private-az2
+              Platform: nexoraa
+              ManagedBy: crossplane
+              kubernetes.io/role/internal-elb: "1"
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.availabilityZone
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%sb"
+
+    - name: private-subnet-az3
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Subnet
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+            access: private
+            zone: az3
+        spec:
+          forProvider:
+            region: us-east-1
+            availabilityZone: us-east-1c
+            cidrBlock: 10.0.160.0/20
+            mapPublicIpOnLaunch: false
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: nexoraa-private-az3
+              Platform: nexoraa
+              ManagedBy: crossplane
+              kubernetes.io/role/internal-elb: "1"
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.availabilityZone
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%sc"
+
+    # =====================================================================
+    #  Elastic IP for NAT Gateway
+    # =====================================================================
+    - name: nat-eip
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: EIP
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            domain: vpc
+            tags:
+              Name: nexoraa-nat-eip
+              Platform: nexoraa
+              ManagedBy: crossplane
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    # =====================================================================
+    #  NAT Gateway (single, in public-subnet-az1)
+    # =====================================================================
+    - name: nat-gateway
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: NATGateway
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            connectivityType: public
+            allocationIdSelector:
+              matchControllerRef: true
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: public
+                zone: az1
+            tags:
+              Name: nexoraa-nat-gw
+              Platform: nexoraa
+              ManagedBy: crossplane
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    # =====================================================================
+    #  Public Route Table
+    # =====================================================================
+    - name: public-route-table
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTable
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+            access: public
+        spec:
+          forProvider:
+            region: us-east-1
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: nexoraa-public-rt
+              Platform: nexoraa
+              ManagedBy: crossplane
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    # --- Public Route (0.0.0.0/0 -> IGW) ----------------------------------
+    - name: public-route
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Route
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: public
+            destinationCidrBlock: 0.0.0.0/0
+            gatewayIdSelector:
+              matchControllerRef: true
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    # --- Public Route Table Associations -----------------------------------
+    - name: public-rta-az1
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTableAssociation
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: public
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: public
+                zone: az1
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    - name: public-rta-az2
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTableAssociation
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: public
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: public
+                zone: az2
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    - name: public-rta-az3
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTableAssociation
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: public
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: public
+                zone: az3
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    # =====================================================================
+    #  Private Route Table
+    # =====================================================================
+    - name: private-route-table
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTable
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+            access: private
+        spec:
+          forProvider:
+            region: us-east-1
+            vpcIdSelector:
+              matchControllerRef: true
+            tags:
+              Name: nexoraa-private-rt
+              Platform: nexoraa
+              ManagedBy: crossplane
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    # --- Private Route (0.0.0.0/0 -> NAT GW) ------------------------------
+    - name: private-route
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: Route
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: private
+            destinationCidrBlock: 0.0.0.0/0
+            natGatewayIdSelector:
+              matchControllerRef: true
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    # --- Private Route Table Associations ----------------------------------
+    - name: private-rta-az1
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTableAssociation
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: private
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: private
+                zone: az1
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    - name: private-rta-az2
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTableAssociation
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: private
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: private
+                zone: az2
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    - name: private-rta-az3
+      base:
+        apiVersion: ec2.aws.upbound.io/v1beta1
+        kind: RouteTableAssociation
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            routeTableIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: private
+            subnetIdSelector:
+              matchControllerRef: true
+              matchLabels:
+                access: private
+                zone: az3
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region

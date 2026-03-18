@@ -1,0 +1,23 @@
+---
+# Staging PostgreSQL Claim
+# Provisions a medium-tier RDS PostgreSQL instance in us-east-1 for staging.
+apiVersion: database.nexoraa.io/v1alpha1
+kind: PostgreSQL
+metadata:
+  name: nexoraa-staging-postgresql
+  namespace: nexoraa-system
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+    environment: staging
+spec:
+  compositionSelector:
+    matchLabels:
+      provider: aws
+      crossplane.io/xrd: xpostgresqls.database.nexoraa.io
+  region: us-east-1
+  size: medium
+  version: "16.4"
+  storageGB: 100
+  writeConnectionSecretToRef:
+    name: nexoraa-staging-postgresql-conn

@@ -1,0 +1,161 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-ins-01-fnol
+  title: "INS-01: First Notice of Loss (FNOL) Intake and Triage"
+  description: >
+    Receive FNOL via any channel (voice, email, chat, web), verify policy,
+    triage severity, detect fraud indicators, create claim, and assign adjuster.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: INS-01
+    nexoraa.ai/industry: INSURANCE
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: VP Claims Operations
+  tags:
+    - insurance
+    - fnol
+    - claims
+    - naic
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/ins-01
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-ins-02-underwriting
+  title: "INS-02: Underwriting Submission Triage and Intake"
+  description: >
+    Receive underwriting submissions, validate completeness, assess risk
+    appetite fit, route to appropriate underwriter with risk analysis.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: INS-02
+    nexoraa.ai/industry: INSURANCE
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: Chief Underwriting Officer
+  tags:
+    - insurance
+    - underwriting
+    - naic
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/ins-02
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-ins-03-claims-adjudication
+  title: "INS-03: Claims Adjudication Support and Auto-Adjudication"
+  description: >
+    Evaluate claims against policy terms, apply coverage rules, calculate
+    payment, and auto-adjudicate within threshold or route to human adjuster.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: INS-03
+    nexoraa.ai/industry: INSURANCE
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: VP Claims Operations
+  tags:
+    - insurance
+    - claims-adjudication
+    - naic
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/ins-03
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-ins-04-subrogation
+  title: "INS-04: Subrogation Identification and Recovery Workflow"
+  description: >
+    Identify subrogation opportunities in paid claims, initiate recovery actions
+    against third parties, track recovery through completion.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: INS-04
+    nexoraa.ai/industry: INSURANCE
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: VP Subrogation / Recovery Director
+  tags:
+    - insurance
+    - subrogation
+    - naic
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/ins-04
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-cpr-01-counterparty-risk
+  title: "CPR-01: Counterparty Risk Assessment"
+  description: >
+    Assess counterparty (beneficiary/receiver) risk for transaction monitoring
+    and suspicious activity investigations.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: CPR-01
+    nexoraa.ai/industry: FINANCIAL_SERVICES
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: BSA Officer / Head of Transaction Monitoring
+  tags:
+    - insurance
+    - financial-services
+    - counterparty-risk
+    - bsa-aml
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/cpr-01
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api

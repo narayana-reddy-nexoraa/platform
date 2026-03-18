@@ -1,0 +1,236 @@
+---
+# XKafkaCluster — CompositeResourceDefinition
+# Defines a portable Apache Kafka (AWS MSK) cluster for the Nexoraa platform.
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xkafkaclusters.messaging.nexoraa.io
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+spec:
+  group: messaging.nexoraa.io
+  names:
+    kind: XKafkaCluster
+    plural: xkafkaclusters
+  claimNames:
+    kind: KafkaCluster
+    plural: kafkaclusters
+  connectionSecretKeys:
+    - bootstrapBrokersTls
+    - zookeeperConnectString
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - region
+                - brokerCount
+              properties:
+                region:
+                  type: string
+                  description: AWS region for the MSK cluster.
+                  enum:
+                    - us-east-1
+                    - us-east-2
+                    - us-west-2
+                    - eu-west-1
+                    - eu-central-1
+                    - ap-southeast-1
+                brokerCount:
+                  type: integer
+                  description: Number of broker nodes (must be a multiple of the number of AZs).
+                  default: 3
+                  minimum: 3
+                  maximum: 30
+                instanceType:
+                  type: string
+                  description: MSK broker instance type.
+                  default: kafka.m5.large
+                  enum:
+                    - kafka.m5.large
+                    - kafka.m5.xlarge
+                    - kafka.m5.2xlarge
+                    - kafka.m5.4xlarge
+                storageGB:
+                  type: integer
+                  description: EBS storage per broker in GiB.
+                  default: 500
+                  minimum: 100
+                  maximum: 16384
+---
+# Composition — wires XKafkaCluster claims to AWS MSK resources
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xkafkacluster-aws
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+    crossplane.io/xrd: xkafkaclusters.messaging.nexoraa.io
+    provider: aws
+spec:
+  compositeTypeRef:
+    apiVersion: messaging.nexoraa.io/v1alpha1
+    kind: XKafkaCluster
+  writeConnectionSecretsToNamespace: nexoraa-system
+  resources:
+    # --- MSK Configuration -------------------------------------------------
+    - name: msk-configuration
+      base:
+        apiVersion: kafka.aws.upbound.io/v1beta1
+        kind: Configuration
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            kafkaVersions:
+              - "3.6.0"
+            serverProperties: |
+              auto.create.topics.enable=false
+              default.replication.factor=3
+              min.insync.replicas=2
+              num.partitions=6
+              num.replica.fetchers=2
+              replica.lag.time.max.ms=30000
+              unclean.leader.election.enable=false
+              log.retention.hours=168
+              log.retention.bytes=-1
+              message.max.bytes=10485760
+              compression.type=lz4
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    # --- CloudWatch Log Group for MSK --------------------------------------
+    - name: msk-log-group
+      base:
+        apiVersion: cloudwatchlogs.aws.upbound.io/v1beta1
+        kind: Group
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            retentionInDays: 30
+            tags:
+              Platform: nexoraa
+              ManagedBy: crossplane
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "/aws/msk/%s"
+
+    # --- MSK Cluster -------------------------------------------------------
+    - name: msk-cluster
+      base:
+        apiVersion: kafka.aws.upbound.io/v1beta2
+        kind: Cluster
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            kafkaVersion: "3.6.0"
+            numberOfBrokerNodes: 3
+            brokerNodeGroupInfo:
+              instanceType: kafka.m5.large
+              storageInfo:
+                ebsStorageInfo:
+                  volumeSize: 500
+              clientSubnets: []
+              securityGroups: []
+              connectivityInfo:
+                publicAccess:
+                  type: DISABLED
+            encryptionInfo:
+              encryptionInTransit:
+                clientBroker: TLS
+                inCluster: true
+              encryptionAtRestKmsKeyArn: ""
+            clientAuthentication:
+              tls:
+                certificateAuthorityArns: []
+              sasl:
+                iam: true
+                scram: false
+            configurationInfo:
+              revision: 1
+            openMonitoring:
+              prometheus:
+                jmxExporter:
+                  enabledInBroker: true
+                nodeExporter:
+                  enabledInBroker: true
+            loggingInfo:
+              brokerLogs:
+                cloudwatchLogs:
+                  enabled: true
+                  logGroup: ""
+            tags:
+              Environment: ""
+              ManagedBy: crossplane
+              Platform: nexoraa
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        # Region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        # Broker count
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.brokerCount
+          toFieldPath: spec.forProvider.numberOfBrokerNodes
+        # Instance type
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.instanceType
+          toFieldPath: spec.forProvider.brokerNodeGroupInfo.instanceType
+        # Storage per broker
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.storageGB
+          toFieldPath: spec.forProvider.brokerNodeGroupInfo.storageInfo.ebsStorageInfo.volumeSize
+        # Configuration ARN reference
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.configurationInfo.arnSelector.matchLabels[crossplane.io/composite]
+        # Log group name
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.loggingInfo.brokerLogs.cloudwatchLogs.logGroup
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "/aws/msk/%s"
+      connectionDetails:
+        - name: bootstrapBrokersTls
+          fromFieldPath: status.atProvider.bootstrapBrokersTls
+        - name: zookeeperConnectString
+          fromFieldPath: status.atProvider.zookeeperConnectString

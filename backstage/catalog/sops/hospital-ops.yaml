@@ -1,0 +1,129 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-hosp-01-bed-mgmt
+  title: "HOSP-01: Inpatient Bed Management and Patient Flow Optimization"
+  description: >
+    Assign inpatient beds within clinical urgency SLA, minimize ED boarding,
+    predict capacity 4-8 hours ahead, manage 24/7 patient flow.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: HOSP-01
+    nexoraa.ai/industry: HOSPITAL_OPS
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: Chief Nursing Officer / VP Patient Care Services
+  tags:
+    - hospital-ops
+    - bed-management
+    - cms-cop
+    - hipaa
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/hosp-01
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-hosp-02-discharge
+  title: "HOSP-02: Discharge Planning Coordination"
+  description: >
+    Predict discharge readiness, coordinate multidisciplinary discharge plans,
+    ensure safe transitions to reduce readmissions.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: HOSP-02
+    nexoraa.ai/industry: HOSPITAL_OPS
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: Director of Case Management / CNO
+  tags:
+    - hospital-ops
+    - discharge-planning
+    - cms-cop
+    - hipaa
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/hosp-02
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-hosp-03-or-scheduling
+  title: "HOSP-03: OR Scheduling Optimization and Block Time Management"
+  description: >
+    Optimize OR scheduling, manage surgeon block time utilization, predict case
+    durations, maximize OR throughput.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: HOSP-03
+    nexoraa.ai/industry: HOSPITAL_OPS
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: Director of Perioperative Services / VP Surgical Services
+  tags:
+    - hospital-ops
+    - or-scheduling
+    - cms-cop
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/hosp-03
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-hosp-04-supply-chain
+  title: "HOSP-04: Hospital Supply Chain Replenishment and Inventory Management"
+  description: >
+    Monitor supply levels, automate replenishment orders, manage critical supply
+    alerts, optimize par levels across units.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: HOSP-04
+    nexoraa.ai/industry: HOSPITAL_OPS
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: Director of Materials Management / VP Supply Chain
+  tags:
+    - hospital-ops
+    - supply-chain
+    - cms-cop
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/hosp-04
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api

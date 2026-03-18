@@ -1,0 +1,101 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: nexoraa-system
+
+resources:
+  - ../../base/namespace.yaml
+  - ../../base/api/deployment.yaml
+  - ../../base/api/service.yaml
+  - ../../base/api/hpa.yaml
+  - ../../base/temporal-worker/deployment.yaml
+  - ../../base/temporal-worker/service.yaml
+  - ../../base/ui/deployment.yaml
+  - ../../base/ui/service.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: nexoraa-platform
+  environment: staging
+
+patches:
+  # API: 2 replicas, moderate resources
+  - target:
+      kind: Deployment
+      name: nexoraa-api
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: nexoraa-api
+      spec:
+        replicas: 2
+        template:
+          spec:
+            containers:
+              - name: api
+                resources:
+                  requests:
+                    cpu: 200m
+                    memory: 256Mi
+                  limits:
+                    cpu: 400m
+                    memory: 512Mi
+
+  # Temporal Worker: 2 replicas, moderate resources
+  - target:
+      kind: Deployment
+      name: nexoraa-temporal-worker
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: nexoraa-temporal-worker
+      spec:
+        replicas: 2
+        template:
+          spec:
+            containers:
+              - name: temporal-worker
+                resources:
+                  requests:
+                    cpu: 200m
+                    memory: 256Mi
+                  limits:
+                    cpu: 400m
+                    memory: 512Mi
+
+  # UI: 2 replicas, moderate resources
+  - target:
+      kind: Deployment
+      name: nexoraa-ui
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: nexoraa-ui
+      spec:
+        replicas: 2
+        template:
+          spec:
+            containers:
+              - name: ui
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 200m
+                    memory: 256Mi
+
+  # HPA: moderate scaling for staging
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: nexoraa-api
+    patch: |
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: nexoraa-api
+      spec:
+        minReplicas: 2
+        maxReplicas: 6

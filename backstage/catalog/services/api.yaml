@@ -1,0 +1,27 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: nexoraa-api
+  description: Go API service for the Nexoraa platform. Exposes REST and gRPC endpoints for SOP execution, case management, audit trail, and tenant administration.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - go
+    - api
+    - grpc
+    - rest
+  links:
+    - url: http://localhost:8080/healthz
+      title: Health Check
+      icon: dashboard
+spec:
+  type: service
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  providesApis:
+    - nexoraa-rest-api
+  dependsOn:
+    - resource:default/nexoraa-kafka
+    - component:default/nexoraa-temporal-worker

@@ -1,0 +1,227 @@
+---
+# XObjectStorage — CompositeResourceDefinition
+# Defines a portable object storage abstraction (S3) for the Nexoraa platform.
+# Includes versioning, encryption, and lifecycle management out of the box.
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xobjectstorages.storage.nexoraa.io
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+spec:
+  group: storage.nexoraa.io
+  names:
+    kind: XObjectStorage
+    plural: xobjectstorages
+  claimNames:
+    kind: ObjectStorage
+    plural: objectstorages
+  connectionSecretKeys:
+    - bucketName
+    - bucketArn
+    - region
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - region
+                - bucketName
+              properties:
+                region:
+                  type: string
+                  description: AWS region for the S3 bucket.
+                  enum:
+                    - us-east-1
+                    - us-east-2
+                    - us-west-2
+                    - eu-west-1
+                    - eu-central-1
+                    - ap-southeast-1
+                bucketName:
+                  type: string
+                  description: Globally unique name for the S3 bucket.
+                  minLength: 3
+                  maxLength: 63
+                  pattern: '^[a-z0-9][a-z0-9.-]*[a-z0-9]$'
+---
+# Composition — wires XObjectStorage claims to AWS S3 resources
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xobjectstorage-aws
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+    crossplane.io/xrd: xobjectstorages.storage.nexoraa.io
+    provider: aws
+spec:
+  compositeTypeRef:
+    apiVersion: storage.nexoraa.io/v1alpha1
+    kind: XObjectStorage
+  writeConnectionSecretsToNamespace: nexoraa-system
+  resources:
+    # --- S3 Bucket ---------------------------------------------------------
+    - name: s3-bucket
+      base:
+        apiVersion: s3.aws.upbound.io/v1beta2
+        kind: Bucket
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            forceDestroy: false
+            tags:
+              Platform: nexoraa
+              ManagedBy: crossplane
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.bucketName
+          toFieldPath: metadata.annotations[crossplane.io/external-name]
+      connectionDetails:
+        - name: bucketName
+          fromFieldPath: status.atProvider.bucket
+        - name: bucketArn
+          fromFieldPath: status.atProvider.arn
+        - name: region
+          fromFieldPath: spec.forProvider.region
+
+    # --- Bucket Versioning -------------------------------------------------
+    - name: bucket-versioning
+      base:
+        apiVersion: s3.aws.upbound.io/v1beta1
+        kind: BucketVersioning
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            bucketSelector:
+              matchControllerRef: true
+            versioningConfiguration:
+              status: Enabled
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    # --- Server-Side Encryption (AES256 / SSE-S3) -------------------------
+    - name: bucket-encryption
+      base:
+        apiVersion: s3.aws.upbound.io/v1beta1
+        kind: BucketServerSideEncryptionConfiguration
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            bucketSelector:
+              matchControllerRef: true
+            rule:
+              - applyServerSideEncryptionByDefault:
+                  sseAlgorithm: aws:kms
+                bucketKeyEnabled: true
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    # --- Public Access Block -----------------------------------------------
+    - name: bucket-public-access-block
+      base:
+        apiVersion: s3.aws.upbound.io/v1beta1
+        kind: BucketPublicAccessBlock
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            bucketSelector:
+              matchControllerRef: true
+            blockPublicAcls: true
+            blockPublicPolicy: true
+            ignorePublicAcls: true
+            restrictPublicBuckets: true
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    # --- Lifecycle Configuration -------------------------------------------
+    - name: bucket-lifecycle
+      base:
+        apiVersion: s3.aws.upbound.io/v1beta1
+        kind: BucketLifecycleConfiguration
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            bucketSelector:
+              matchControllerRef: true
+            rule:
+              # Transition current objects to Intelligent-Tiering after 90 days
+              - id: transition-to-intelligent-tiering
+                status: Enabled
+                filter:
+                  prefix: ""
+                transition:
+                  - days: 90
+                    storageClass: INTELLIGENT_TIERING
+              # Transition to Glacier after 365 days
+              - id: transition-to-glacier
+                status: Enabled
+                filter:
+                  prefix: ""
+                transition:
+                  - days: 365
+                    storageClass: GLACIER
+              # Expire non-current versions after 90 days
+              - id: expire-noncurrent-versions
+                status: Enabled
+                filter:
+                  prefix: ""
+                noncurrentVersionExpiration:
+                  noncurrentDays: 90
+              # Abort incomplete multipart uploads after 7 days
+              - id: abort-incomplete-multipart
+                status: Enabled
+                filter:
+                  prefix: ""
+                abortIncompleteMultipartUpload:
+                  daysAfterInitiation: 7
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region

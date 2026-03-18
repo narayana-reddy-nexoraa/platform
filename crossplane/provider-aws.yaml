@@ -1,0 +1,91 @@
+---
+# Crossplane AWS Provider Installation
+# Installs the Upbound official AWS provider family for Nexoraa platform
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws-ec2
+  namespace: nexoraa-system
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+spec:
+  package: xpkg.upbound.io/upbound/provider-aws-ec2:v1.16.0
+  controllerConfigRef:
+    name: nexoraa-aws-controller-config
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws-rds
+  namespace: nexoraa-system
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+spec:
+  package: xpkg.upbound.io/upbound/provider-aws-rds:v1.16.0
+  controllerConfigRef:
+    name: nexoraa-aws-controller-config
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws-s3
+  namespace: nexoraa-system
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+spec:
+  package: xpkg.upbound.io/upbound/provider-aws-s3:v1.16.0
+  controllerConfigRef:
+    name: nexoraa-aws-controller-config
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws-kafka
+  namespace: nexoraa-system
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+spec:
+  package: xpkg.upbound.io/upbound/provider-aws-kafka:v1.16.0
+  controllerConfigRef:
+    name: nexoraa-aws-controller-config
+---
+# Controller configuration for all AWS providers
+apiVersion: pkg.crossplane.io/v1alpha1
+kind: ControllerConfig
+metadata:
+  name: nexoraa-aws-controller-config
+  namespace: nexoraa-system
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+spec:
+  podSecurityContext:
+    runAsNonRoot: true
+  resources:
+    limits:
+      memory: 512Mi
+      cpu: 500m
+    requests:
+      memory: 256Mi
+      cpu: 250m
+---
+# AWS ProviderConfig — references the credential secret for authentication
+apiVersion: aws.upbound.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: nexoraa-aws
+  namespace: nexoraa-system
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+spec:
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: nexoraa-system
+      name: aws-credentials
+      key: credentials

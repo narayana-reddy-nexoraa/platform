@@ -1,0 +1,16 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: nexoraa-kafka
+  description: Apache Kafka cluster providing event streaming for SOP case lifecycle events, audit trail, and inter-service communication across the Nexoraa platform.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+  tags:
+    - kafka
+    - event-streaming
+    - messaging
+spec:
+  type: resource
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
