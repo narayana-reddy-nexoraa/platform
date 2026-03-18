@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nexoraa-prod-app-of-apps
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    env: production
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/narayana-reddy-nexoraa/platform.git
+    targetRevision: main
+    path: k8s/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nexoraa-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

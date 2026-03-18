@@ -1,6 +1,6 @@
 .PHONY: docker-up docker-down migrate-up migrate-down sqlc-generate \
        build-api build-worker build-temporal-worker run-api run-worker \
-       test test-unit test-integration test-load \
+       test test-unit test-integration test-e2e test-compliance test-load test-load-sop \
        docker-build docker-up-full docker-down-full \
        deploy tf-plan tf-apply tf-destroy \
        kafka-topics
@@ -49,8 +49,17 @@ test-unit:
 test-integration:
 	go test ./tests/integration/... -v -count=1 -timeout 120s
 
+test-e2e:
+	go test ./tests/e2e/... -v -count=1 -timeout 300s
+
+test-compliance:
+	go test ./internal/compliance/... -v -count=1
+
 test-load:
 	k6 run tests/k6/load_test.js
+
+test-load-sop:
+	k6 run tests/load/sop_load_test.js
 
 # --- Docker Full Stack ---
 docker-build:

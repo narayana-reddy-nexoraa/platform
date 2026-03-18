@@ -1,0 +1,112 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: nexoraa-system
+
+resources:
+  - ../../base/namespace.yaml
+  - ../../base/api/deployment.yaml
+  - ../../base/api/service.yaml
+  - ../../base/api/hpa.yaml
+  - ../../base/temporal-worker/deployment.yaml
+  - ../../base/temporal-worker/service.yaml
+  - ../../base/ui/deployment.yaml
+  - ../../base/ui/service.yaml
+  - ../../base/kafka/strimzi-kafka.yaml
+  - ../../base/kafka/kafka-topics.yaml
+  - pdb-api.yaml
+  - pdb-temporal-worker.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: nexoraa-platform
+  env: production
+
+patches:
+  # API: 3 replicas, production resource limits
+  - target:
+      kind: Deployment
+      name: nexoraa-api
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: nexoraa-api
+      spec:
+        replicas: 3
+        template:
+          spec:
+            containers:
+              - name: api
+                resources:
+                  requests:
+                    cpu: 500m
+                    memory: 512Mi
+                  limits:
+                    cpu: 1000m
+                    memory: 1Gi
+
+  # Temporal Worker: 3 replicas, production resource limits
+  - target:
+      kind: Deployment
+      name: nexoraa-temporal-worker
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: nexoraa-temporal-worker
+      spec:
+        replicas: 3
+        template:
+          spec:
+            containers:
+              - name: temporal-worker
+                resources:
+                  requests:
+                    cpu: 1000m
+                    memory: 1Gi
+                  limits:
+                    cpu: 2000m
+                    memory: 2Gi
+
+  # UI: 3 replicas, production resource limits
+  - target:
+      kind: Deployment
+      name: nexoraa-ui
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: nexoraa-ui
+      spec:
+        replicas: 3
+        template:
+          spec:
+            containers:
+              - name: ui
+                resources:
+                  requests:
+                    cpu: 200m
+                    memory: 256Mi
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+
+  # HPA: production scaling — min 3, max 10, target CPU 70%
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: nexoraa-api
+    patch: |
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: nexoraa-api
+      spec:
+        minReplicas: 3
+        maxReplicas: 10
+        metrics:
+          - type: Resource
+            resource:
+              name: cpu
+              target:
+                type: Utilization
+                averageUtilization: 70

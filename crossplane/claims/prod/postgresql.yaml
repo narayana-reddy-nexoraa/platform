@@ -1,0 +1,25 @@
+---
+# Production PostgreSQL Claim
+# Provisions a large-tier Multi-AZ RDS PostgreSQL instance in us-east-1 for production.
+# Instance class: db.r6g.2xlarge
+apiVersion: database.nexoraa.io/v1alpha1
+kind: PostgreSQL
+metadata:
+  name: nexoraa-prod-postgresql
+  namespace: nexoraa-system
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+    env: production
+spec:
+  compositionSelector:
+    matchLabels:
+      provider: aws
+      crossplane.io/xrd: xpostgresqls.database.nexoraa.io
+  region: us-east-1
+  size: large
+  version: "16.4"
+  storageGB: 200
+  multiAZ: true
+  writeConnectionSecretToRef:
+    name: nexoraa-prod-postgresql-conn

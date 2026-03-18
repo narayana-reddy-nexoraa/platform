@@ -1,0 +1,24 @@
+---
+# Production Kafka Cluster Claim
+# Provisions a 3-broker MSK cluster in us-east-1 for production.
+# Instance class: kafka.m5.xlarge with 1000GB storage per broker.
+apiVersion: messaging.nexoraa.io/v1alpha1
+kind: KafkaCluster
+metadata:
+  name: nexoraa-prod-kafka
+  namespace: nexoraa-system
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+    env: production
+spec:
+  compositionSelector:
+    matchLabels:
+      provider: aws
+      crossplane.io/xrd: xkafkaclusters.messaging.nexoraa.io
+  region: us-east-1
+  brokerCount: 3
+  instanceType: kafka.m5.xlarge
+  storageGB: 1000
+  writeConnectionSecretToRef:
+    name: nexoraa-prod-kafka-conn
