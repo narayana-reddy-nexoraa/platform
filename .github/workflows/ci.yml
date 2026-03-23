@@ -26,11 +26,11 @@ jobs:
         run: go vet ./...
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.1.6
           args: --timeout=5m
-        continue-on-error: true  # golangci-lint may not yet support Go 1.25
+        continue-on-error: true  # golangci-lint may not yet fully support Go 1.25
 
   test-unit:
     name: Unit Tests
