@@ -86,3 +86,37 @@ output "region" {
   description = "AWS region"
   value       = var.region
 }
+
+# -----------------------------------------------------------------------------
+# EKS
+# -----------------------------------------------------------------------------
+output "eks_cluster_name" {
+  description = "EKS cluster name"
+  value       = aws_eks_cluster.main.name
+}
+
+output "eks_cluster_endpoint" {
+  description = "EKS cluster API endpoint"
+  value       = aws_eks_cluster.main.endpoint
+}
+
+output "eks_cluster_ca_certificate" {
+  description = "EKS cluster CA certificate (base64)"
+  value       = aws_eks_cluster.main.certificate_authority[0].data
+  sensitive   = true
+}
+
+output "eks_oidc_provider_arn" {
+  description = "EKS OIDC provider ARN (for IRSA)"
+  value       = aws_iam_openid_connect_provider.eks.arn
+}
+
+output "eks_node_group_name" {
+  description = "EKS managed node group name"
+  value       = aws_eks_node_group.general.node_group_name
+}
+
+output "eks_kubeconfig_command" {
+  description = "Command to configure kubectl"
+  value       = "aws eks update-kubeconfig --region ${var.region} --name ${aws_eks_cluster.main.name}"
+}

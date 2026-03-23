@@ -64,12 +64,21 @@ func DefaultRetryPolicy() StepRetryPolicy {
 }
 
 // StepConfig holds agent-specific configuration for a workflow step.
+// Inspired by the AgentGoal pattern from the Temporal reinsurance case study
+// (Sophia Barnes, Stanford, Jan 2026) — each step is a focused "agent goal"
+// with scoped context, few-shot examples, and simple tool arguments.
 type StepConfig struct {
 	// LLMModel is the model ID for classification/decisioning steps (e.g., "gpt-4o-mini", "claude-sonnet-4-6").
 	LLMModel string `json:"llm_model,omitempty"`
 
 	// PromptTemplate is the prompt template key from the prompt registry.
 	PromptTemplate string `json:"prompt_template,omitempty"`
+
+	// FewShotExamples provides domain-specific example conversations that improve
+	// LLM accuracy for this step. Each example is an input/output pair the LLM
+	// can reference when making decisions.
+	// Pattern: AgentGoal.example_conversation_history from Temporal reinsurance case study.
+	FewShotExamples []FewShotExample `json:"few_shot_examples,omitempty"`
 
 	// DataSources lists external system references for data retrieval steps.
 	DataSources []string `json:"data_sources,omitempty"`
@@ -79,4 +88,22 @@ type StepConfig struct {
 
 	// TargetSystems lists systems to write to for execution steps.
 	TargetSystems []string `json:"target_systems,omitempty"`
+
+	// MaxContextTokens limits the context window passed to the LLM for this step.
+	// Prevents token bloat when dealing with large inter-step data.
+	// Pattern: context isolation from Temporal reinsurance case study.
+	MaxContextTokens int `json:"max_context_tokens,omitempty"`
+}
+
+// FewShotExample is an input/output pair used to prime the LLM for domain-specific tasks.
+// Pattern: AgentGoal.example_conversation_history from Temporal reinsurance case study.
+type FewShotExample struct {
+	// Input is the example user/system input.
+	Input string `json:"input"`
+
+	// Output is the expected agent response/action for this input.
+	Output string `json:"output"`
+
+	// Explanation optionally describes why this output is correct (for auditability).
+	Explanation string `json:"explanation,omitempty"`
 }

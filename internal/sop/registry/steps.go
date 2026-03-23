@@ -23,12 +23,19 @@ type StepOverrides struct {
 	LLMModel           string
 	PromptTemplate     string
 
+	// ClassificationFewShots provides domain-specific examples for the classification LLM.
+	// Pattern: AgentGoal.example_conversation_history from Temporal reinsurance case study.
+	ClassificationFewShots []sopdomain.FewShotExample
+
 	// DecisioningName overrides the decisioning step name.
 	DecisioningName string
 	DecisioningDesc string
 	// HITLAfterDecisioning controls whether a HITL gate follows the decisioning step.
 	HITLAfterDecisioning bool
 	HITLSLADuration      time.Duration
+
+	// DecisioningFewShots provides domain-specific examples for the decisioning LLM.
+	DecisioningFewShots []sopdomain.FewShotExample
 
 	// ExecutionName overrides the execution step name.
 	ExecutionName string
@@ -38,6 +45,9 @@ type StepOverrides struct {
 	// AuditName overrides the audit step name.
 	AuditName string
 	AuditDesc string
+
+	// MaxContextTokens limits LLM context per step (0 = unlimited).
+	MaxContextTokens int
 }
 
 // BuildStandardSteps creates the 6-step agent pattern with per-SOP overrides.
@@ -81,8 +91,10 @@ func BuildStandardSteps(o StepOverrides) []sopdomain.AgentStep {
 			Timeout:     45 * time.Second,
 			RetryPolicy: sopdomain.DefaultRetryPolicy(),
 			Config: sopdomain.StepConfig{
-				LLMModel:       defaultModel,
-				PromptTemplate: o.PromptTemplate,
+				LLMModel:         defaultModel,
+				PromptTemplate:   o.PromptTemplate,
+				FewShotExamples:  o.ClassificationFewShots,
+				MaxContextTokens: o.MaxContextTokens,
 			},
 		},
 		{
@@ -95,8 +107,10 @@ func BuildStandardSteps(o StepOverrides) []sopdomain.AgentStep {
 			Timeout:         45 * time.Second,
 			RetryPolicy:     sopdomain.DefaultRetryPolicy(),
 			Config: sopdomain.StepConfig{
-				LLMModel:       defaultModel,
-				PromptTemplate: o.PromptTemplate,
+				LLMModel:         defaultModel,
+				PromptTemplate:   o.PromptTemplate,
+				FewShotExamples:  o.DecisioningFewShots,
+				MaxContextTokens: o.MaxContextTokens,
 			},
 		},
 		{

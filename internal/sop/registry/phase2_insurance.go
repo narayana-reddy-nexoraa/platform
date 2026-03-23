@@ -23,6 +23,37 @@ func NewINS01FNOL() *sopdomain.SOPDefinition {
 			ClassificationName:   "Severity Triage and Fraud Detection",
 			ClassificationDesc:   "Classify loss severity (Low/Medium/High), detect fraud indicators, flag CAT events, assign priority tier",
 			PromptTemplate:       "fnol_triage",
+			// Few-shot examples for classification (AgentGoal pattern from Temporal reinsurance case study)
+			ClassificationFewShots: []sopdomain.FewShotExample{
+				{
+					Input:       `{"loss_type":"auto_collision","loss_description":"Minor fender bender in parking lot, no injuries","date_of_loss":"2026-03-15","prior_claims":0}`,
+					Output:      `{"severity":"LOW","fraud_score":0.05,"cat_event":false,"priority":"standard"}`,
+					Explanation: "Minor auto collision with no injuries and no prior claims history is low severity, low fraud risk",
+				},
+				{
+					Input:       `{"loss_type":"auto_collision","loss_description":"Total loss, vehicle fire after collision on highway, driver hospitalized","date_of_loss":"2026-03-10","prior_claims":3}`,
+					Output:      `{"severity":"HIGH","fraud_score":0.35,"cat_event":false,"priority":"urgent"}`,
+					Explanation: "Total loss with injuries and multiple prior claims warrants high severity and elevated fraud attention",
+				},
+				{
+					Input:       `{"loss_type":"property","loss_description":"Roof damage from hurricane, multiple rooms flooded","date_of_loss":"2026-02-28","cat_event_declared":true}`,
+					Output:      `{"severity":"HIGH","fraud_score":0.15,"cat_event":true,"priority":"cat_surge"}`,
+					Explanation: "Declared catastrophe event triggers CAT surge processing with dedicated adjuster pool",
+				},
+			},
+			// Few-shot examples for decisioning
+			DecisioningFewShots: []sopdomain.FewShotExample{
+				{
+					Input:       `{"severity":"LOW","fraud_score":0.05,"policy_active":true,"coverage_confirmed":true}`,
+					Output:      `{"action":"auto_create_claim","reserve_estimate":2500,"adjuster_pool":"standard","requires_hitl":false}`,
+					Explanation: "Low severity, no fraud indicators, active policy — auto-create claim without HITL",
+				},
+				{
+					Input:       `{"severity":"HIGH","fraud_score":0.72,"policy_active":true,"coverage_confirmed":true}`,
+					Output:      `{"action":"escalate_to_siu","reserve_estimate":null,"adjuster_pool":"senior","requires_hitl":true}`,
+					Explanation: "High fraud score above 0.7 threshold — must escalate to Special Investigations Unit",
+				},
+			},
 			DecisioningName:      "Claim Routing Decision",
 			DecisioningDesc:      "Determine: auto-create claim (low severity), escalate to senior adjuster (high/fraud), request additional info",
 			HITLAfterDecisioning: true,
@@ -30,6 +61,7 @@ func NewINS01FNOL() *sopdomain.SOPDefinition {
 			ExecutionName:        "Claim Creation and Assignment",
 			ExecutionDesc:        "Create claim record, set initial reserves, assign adjuster, notify claimant and supervising manager",
 			TargetSystems:        []string{"Claims Management System", "Notification Service", "SIEM"},
+			MaxContextTokens:     4096,
 		}),
 		ComplianceFrameworks: []sopdomain.ComplianceFramework{sopdomain.ComplianceNAIC},
 		ProcessOwner:         "VP Claims Operations",

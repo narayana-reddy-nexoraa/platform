@@ -21,3 +21,30 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
+# -----------------------------------------------------------------------------
+# EKS Variables
+# -----------------------------------------------------------------------------
+variable "eks_node_instance_types" {
+  description = "EC2 instance types for EKS node group"
+  type        = list(string)
+  default     = ["t3.medium"]
+}
+
+variable "eks_node_desired_size" {
+  description = "Desired number of EKS worker nodes"
+  type        = number
+  default     = 2
+}
+
+variable "eks_node_min_size" {
+  description = "Minimum number of EKS worker nodes"
+  type        = number
+  default     = 1
+}
+
+variable "eks_node_max_size" {
+  description = "Maximum number of EKS worker nodes"
+  type        = number
+  default     = 5
+}

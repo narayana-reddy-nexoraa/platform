@@ -22,6 +22,7 @@ type SOPRepository interface {
 	GetByID(ctx context.Context, executionID, tenantID uuid.UUID) (*sopdomain.SOPExecution, error)
 	List(ctx context.Context, tenantID uuid.UUID, sopID, status, industry *string, limit, offset int32) ([]sopdomain.SOPExecution, int64, error)
 	UpdateStatus(ctx context.Context, executionID uuid.UUID, status sopdomain.SOPExecutionStatus, currentStep string, version int32) (*sopdomain.SOPExecution, error)
+	UpdateTemporalRunID(ctx context.Context, executionID uuid.UUID, runID string) error
 	Complete(ctx context.Context, executionID uuid.UUID, outputPayload json.RawMessage, version int32) (*sopdomain.SOPExecution, error)
 	Fail(ctx context.Context, executionID uuid.UUID, version int32) (*sopdomain.SOPExecution, error)
 }
@@ -152,6 +153,13 @@ func (r *PostgresSOPRepository) Fail(ctx context.Context, executionID uuid.UUID,
 		return nil, err
 	}
 	return mapSOPExecution(row), nil
+}
+
+func (r *PostgresSOPRepository) UpdateTemporalRunID(ctx context.Context, executionID uuid.UUID, runID string) error {
+	_, err := r.pool.Exec(ctx,
+		"UPDATE sop_executions SET temporal_run_id = $1 WHERE sop_execution_id = $2",
+		runID, executionID)
+	return err
 }
 
 // mapSOPExecution converts sqlc-generated type to domain type.

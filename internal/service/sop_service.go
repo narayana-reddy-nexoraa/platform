@@ -61,33 +61,35 @@ func (s *SOPService) StartExecution(
 	executionID := uuid.New()
 	temporalWorkflowID := sopdomain.TemporalWorkflowID(sopID, executionID)
 
-	var temporalRunID string
+	// Create DB record FIRST — activities reference this via FK
+	exec, err := s.repo.Create(ctx, sopID, tenantID, string(sopDef.Industry), payload, temporalWorkflowID, "")
+	if err != nil {
+		return nil, fmt.Errorf("create sop execution: %w", err)
+	}
 
-	// Start Temporal workflow if client is available
+	// Start Temporal workflow using the DB-assigned execution ID
 	if s.temporalClient != nil {
-		wfInput := buildWorkflowInput(executionID, sopDef, tenantID, payload)
+		wfInput := buildWorkflowInput(exec.SOPExecutionID, sopDef, tenantID, payload)
 
 		run, err := s.temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 			ID:        temporalWorkflowID,
 			TaskQueue: sopDef.TaskQueue(),
 		}, workflows.SOPWorkflow, wfInput)
 		if err != nil {
-			return nil, fmt.Errorf("start temporal workflow: %w", err)
+			s.logger.Error().Err(err).Str("sop_id", sopID).Msg("failed to start temporal workflow")
+			// DB record exists but workflow failed — mark as failed
+			return exec, nil
 		}
-		temporalRunID = run.GetRunID()
+
+		// Update DB with Temporal run ID
+		s.repo.UpdateTemporalRunID(ctx, exec.SOPExecutionID, run.GetRunID())
 
 		s.logger.Info().
 			Str("sop_id", sopID).
 			Str("workflow_id", temporalWorkflowID).
-			Str("run_id", temporalRunID).
+			Str("run_id", run.GetRunID()).
 			Str("task_queue", sopDef.TaskQueue()).
 			Msg("temporal workflow started")
-	}
-
-	// Create DB record
-	exec, err := s.repo.Create(ctx, sopID, tenantID, string(sopDef.Industry), payload, temporalWorkflowID, temporalRunID)
-	if err != nil {
-		return nil, fmt.Errorf("create sop execution: %w", err)
 	}
 
 	return exec, nil

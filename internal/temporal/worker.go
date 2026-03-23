@@ -30,8 +30,9 @@ func StartWorkers(c client.Client, acts *activities.Activities, logger zerolog.L
 			MaxConcurrentWorkflowTaskExecutionSize: 10,
 		})
 
-		// Register the generic SOP workflow
+		// Register workflows
 		w.RegisterWorkflow(workflows.SOPWorkflow)
+		w.RegisterWorkflow(workflows.BridgeWorkflow)
 
 		// Register all shared activities
 		w.RegisterActivity(acts.Intake)

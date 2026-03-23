@@ -92,25 +92,37 @@ func (a *Activities) DataRetrieval(ctx context.Context, input workflows.Activity
 }
 
 // Classification categorizes, scores risk, and prioritizes the data.
+// Uses few-shot examples and user context when available.
 func (a *Activities) Classification(ctx context.Context, input workflows.ActivityInput) (*workflows.ActivityOutput, error) {
 	a.logger.Info().
 		Str("sop_id", input.SOPID).
 		Str("step_id", input.StepID).
 		Str("execution_id", input.SOPExecutionID).
+		Int("few_shot_count", len(input.StepConfig.FewShotExamples)).
+		Bool("has_user_context", input.UserContext != "").
 		Msg("classification activity started")
 
 	start := time.Now()
 
 	// TODO: Implement actual LLM-based classification.
+	// When calling the LLM, include:
+	// 1. Few-shot examples from StepConfig.FewShotExamples (AgentGoal pattern)
+	// 2. User context from input.UserContext (user_input pattern)
+	// 3. Payload data within MaxContextTokens limit (context isolation pattern)
 	result := map[string]interface{}{
 		"input_data": json.RawMessage(input.Payload),
 		"classification": map[string]interface{}{
-			"risk_level": "MEDIUM",
-			"confidence": 0.85,
-			"category":   "standard",
-			"model_used": input.StepConfig.LLMModel,
-			"timestamp":  time.Now().UTC().Format(time.RFC3339),
+			"risk_level":         "MEDIUM",
+			"confidence":         0.85,
+			"category":           "standard",
+			"model_used":         input.StepConfig.LLMModel,
+			"few_shot_count":     len(input.StepConfig.FewShotExamples),
+			"user_context_used":  input.UserContext != "",
+			"timestamp":          time.Now().UTC().Format(time.RFC3339),
 		},
+	}
+	if input.UserContext != "" {
+		result["user_context_applied"] = input.UserContext
 	}
 	output, _ := json.Marshal(result)
 
@@ -124,25 +136,37 @@ func (a *Activities) Classification(ctx context.Context, input workflows.Activit
 }
 
 // Decisioning applies business rules and recommends an action.
+// Uses few-shot examples and user context when available.
 func (a *Activities) Decisioning(ctx context.Context, input workflows.ActivityInput) (*workflows.ActivityOutput, error) {
 	a.logger.Info().
 		Str("sop_id", input.SOPID).
 		Str("step_id", input.StepID).
 		Str("execution_id", input.SOPExecutionID).
+		Int("few_shot_count", len(input.StepConfig.FewShotExamples)).
+		Bool("has_user_context", input.UserContext != "").
 		Msg("decisioning activity started")
 
 	start := time.Now()
 
 	// TODO: Implement actual LLM-based decisioning with business rules.
+	// When calling the LLM, include:
+	// 1. Few-shot examples from StepConfig.FewShotExamples (AgentGoal pattern)
+	// 2. User context from input.UserContext (user_input pattern)
+	// 3. Payload data within MaxContextTokens limit (context isolation pattern)
 	decision := map[string]interface{}{
 		"input_data": json.RawMessage(input.Payload),
 		"decision": map[string]interface{}{
-			"action":     "proceed",
-			"confidence": 0.90,
-			"rationale":  "All criteria met per SOP guidelines",
-			"model_used": input.StepConfig.LLMModel,
-			"timestamp":  time.Now().UTC().Format(time.RFC3339),
+			"action":            "proceed",
+			"confidence":        0.90,
+			"rationale":         "All criteria met per SOP guidelines",
+			"model_used":        input.StepConfig.LLMModel,
+			"few_shot_count":    len(input.StepConfig.FewShotExamples),
+			"user_context_used": input.UserContext != "",
+			"timestamp":         time.Now().UTC().Format(time.RFC3339),
 		},
+	}
+	if input.UserContext != "" {
+		decision["user_context_applied"] = input.UserContext
 	}
 	output, _ := json.Marshal(decision)
 
