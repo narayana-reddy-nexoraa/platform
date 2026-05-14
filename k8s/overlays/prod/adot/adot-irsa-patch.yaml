@@ -1,0 +1,8 @@
+# from: terraform output amp_remote_write_irsa_role_arn
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: amp-remote-write
+  namespace: monitoring
+  annotations:
+    eks.amazonaws.com/role-arn: "REPLACE_WITH_TERRAFORM_amp_remote_write_irsa_role_arn"
