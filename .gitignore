@@ -10,7 +10,6 @@ bin/
 
 # Temp
 tmp/
-.worktrees/
 
 # Terraform
 terraform/.terraform/
