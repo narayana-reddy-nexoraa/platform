@@ -19,7 +19,7 @@ output "amp_prometheus_query_endpoint" {
 
 output "amp_remote_write_url" {
   description = "Prometheus remote_write URL; use as AWS_PROMETHEUS_ENDPOINT for the ADOT collector Deployment"
-  value       = "https://aps-workspaces.${var.region}.amazonaws.com/workspaces/${aws_prometheus_workspace.main.id}/api/v1/remote_write"
+  value       = "${trimsuffix(aws_prometheus_workspace.main.prometheus_endpoint, "/")}/api/v1/remote_write"
 }
 
 output "amp_remote_write_irsa_role_arn" {

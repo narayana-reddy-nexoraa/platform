@@ -4,7 +4,7 @@ metadata:
   name: adot-amp-collector
 rules:
   - apiGroups: [""]
-    resources: [nodes, nodes/metrics, nodes/proxy, services, endpoints, pods, namespaces, configmaps]
+    resources: [nodes, nodes/metrics, services, endpoints, pods, namespaces, configmaps]
     verbs: [get, list, watch]
   - apiGroups: ["apps"]
     resources: [deployments, daemonsets, replicasets, statefulsets]

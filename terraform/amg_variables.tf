@@ -8,10 +8,10 @@ variable "amg_authentication_providers" {
   default     = ["AWS_SSO"]
 
   validation {
-    condition = alltrue([
+    condition = length(var.amg_authentication_providers) > 0 && alltrue([
       for p in var.amg_authentication_providers : contains(["AWS_SSO", "SAML"], p)
     ])
-    error_message = "Each entry must be AWS_SSO or SAML."
+    error_message = "At least one provider required; each must be AWS_SSO or SAML."
   }
 }
 
