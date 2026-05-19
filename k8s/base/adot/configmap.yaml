@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adot-amp-collector-config
+  namespace: monitoring
+data:
+  collector.yaml: |
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+      sigv4auth:
+        service: aps
+        region: ${env:AWS_REGION}
+
+    receivers:
+      prometheus:
+        config:
+          global:
+            scrape_interval: 30s
+            scrape_timeout: 10s
+          scrape_configs:
+            - job_name: kubernetes-apiservers
+              sample_limit: 5000
+              scheme: https
+              kubernetes_sd_configs:
+                - role: endpoints
+              tls_config:
+                ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+                  action: keep
+                  regex: kubernetes;https
+
+            - job_name: kubernetes-nodes
+              sample_limit: 5000
+              scheme: https
+              kubernetes_sd_configs:
+                - role: node
+              tls_config:
+                ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+              relabel_configs:
+                - action: labelmap
+                  regex: __meta_kubernetes_node_label_(.+)
+
+            - job_name: kubernetes-cadvisor
+              sample_limit: 5000
+              scheme: https
+              metrics_path: /metrics/cadvisor
+              kubernetes_sd_configs:
+                - role: node
+              tls_config:
+                ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+              relabel_configs:
+                - action: labelmap
+                  regex: __meta_kubernetes_node_label_(.+)
+
+            - job_name: kubernetes-service-endpoints
+              sample_limit: 5000
+              kubernetes_sd_configs:
+                - role: endpoints
+              tls_config:
+                ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+                  action: keep
+                  regex: true
+                - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scheme]
+                  action: replace
+                  regex: (https?)
+                  target_label: __scheme__
+                - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+                  action: replace
+                  regex: (.+)
+                  target_label: __metrics_path__
+                - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+                  action: replace
+                  regex: ([^:]+)(?::\d+)?;(\d+)
+                  replacement: $1:$2
+                  target_label: __address__
+                - action: labelmap
+                  regex: __meta_kubernetes_pod_label_(.+)
+
+    processors:
+      batch:
+        timeout: 60s
+
+    exporters:
+      prometheusremotewrite:
+        endpoint: ${env:AWS_PROMETHEUS_ENDPOINT}
+        auth:
+          authenticator: sigv4auth
+
+    service:
+      extensions: [health_check, sigv4auth]
+      pipelines:
+        metrics:
+          receivers: [prometheus]
+          processors: [batch]
+          exporters: [prometheusremotewrite]

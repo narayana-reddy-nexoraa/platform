@@ -16,3 +16,6 @@ terraform/.terraform/
 terraform/*.tfstate
 terraform/*.tfstate.backup
 terraform/.terraform.lock.hcl
+
+# ADOT per-overlay config (populated from terraform output, never committed)
+k8s/overlays/*/adot/adot-config.env

@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adot-amp-collector
+  namespace: monitoring
+  labels:
+    app: adot-amp-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: adot-amp-collector
+  template:
+    metadata:
+      labels:
+        app: adot-amp-collector
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: amp-remote-write
+      containers:
+        - name: aws-otel-collector
+          image: public.ecr.aws/aws-observability/aws-otel-collector:v0.102.1
+          args:
+            - "--config=/conf/collector.yaml"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            # Values injected per overlay via Kustomize replacements from adot-config.env
+            - name: AWS_REGION
+              value: ""
+            - name: AWS_PROMETHEUS_ENDPOINT
+              value: ""
+          ports:
+            - name: health
+              containerPort: 13133
+              protocol: TCP
+          volumeMounts:
+            - name: adot-config
+              mountPath: /conf
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: home
+              mountPath: /home/aoc
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: adot-config
+          configMap:
+            name: adot-amp-collector-config
+        - name: tmp
+          emptyDir: {}
+        - name: home
+          emptyDir: {}
