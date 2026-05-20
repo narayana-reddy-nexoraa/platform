@@ -10,8 +10,13 @@
 #
 # Usage:
 #   ./scripts/bootstrap-cluster.sh [dev|staging|prod]
+#
+# If Terraform apply is done separately (e.g. CI), run only the post-apply path:
+#   ./scripts/setup-after-terraform-apply.sh [dev|staging|prod]
 # -----------------------------------------------------------------------------
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ENV="${1:-dev}"
 REGION="us-east-1"
@@ -43,18 +48,12 @@ fi
 terraform apply tfplan
 cd ..
 
-# Configure kubectl
-echo ""
-echo ">>> Configuring kubectl..."
-aws eks update-kubeconfig --region "${REGION}" --name "${CLUSTER_NAME}"
-kubectl cluster-info
-
 # -----------------------------------------------------------------------------
-# Step 2: Create namespaces
+# Step 2: kubectl + namespaces + Prometheus / Grafana (no app Kustomize — Argo CD syncs apps)
 # -----------------------------------------------------------------------------
 echo ""
-echo ">>> Step 2: Creating namespaces..."
-kubectl apply -f k8s/base/namespace.yaml
+echo ">>> Step 2: Configuring kubectl and installing monitoring stack..."
+"${SCRIPT_DIR}/setup-after-terraform-apply.sh" "${ENV}" --skip-kustomize
 
 # -----------------------------------------------------------------------------
 # Step 3: Install ArgoCD
@@ -166,6 +165,8 @@ echo "Access points:"
 echo "  kubectl:    aws eks update-kubeconfig --region ${REGION} --name ${CLUSTER_NAME}"
 echo "  ArgoCD UI:  kubectl port-forward svc/argocd-server -n argocd 8443:443"
 echo "  Temporal UI: kubectl port-forward svc/temporal-web -n temporal 8088:8080"
+echo "  Grafana:     kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3001:80"
+echo "  Prometheus:  kubectl port-forward -n monitoring svc/kube-prometheus-stack-kube-prometheus-prometheus 9091:9090"
 echo ""
 echo "ArgoCD will now auto-sync all applications from Git."
 echo "Check status: kubectl get applications -n argocd"

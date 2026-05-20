@@ -12,7 +12,7 @@ metadata:
     - grpc
     - rest
   links:
-    - url: http://localhost:8080/healthz
+    - url: http://localhost:18080/healthz
       title: Health Check
       icon: dashboard
 spec:

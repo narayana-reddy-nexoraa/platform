@@ -28,7 +28,7 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.API_URL || 'http://localhost:8080';
+const BASE_URL = __ENV.API_URL || 'http://localhost:18080';
 const TENANT_ID = __ENV.TENANT_ID || '00000000-0000-0000-0000-000000000001';
 
 const SOP_IDS = [

@@ -11,7 +11,7 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
+const BASE_URL = __ENV.BASE_URL || 'http://localhost:18080';
 const TENANT_ID = '550e8400-e29b-41d4-a716-446655440000';
 
 export default function () {
