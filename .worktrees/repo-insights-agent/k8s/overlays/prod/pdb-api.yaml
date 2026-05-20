@@ -1,0 +1,16 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nexoraa-api-pdb
+  namespace: nexoraa-system
+  labels:
+    app: nexoraa-api
+    app.kubernetes.io/name: nexoraa-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: nexoraa-platform
+    env: production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: nexoraa-api

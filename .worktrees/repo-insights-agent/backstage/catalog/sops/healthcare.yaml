@@ -1,0 +1,127 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-hc-01-prior-auth
+  title: "HC-01: Prior Authorization Submission and Tracking"
+  description: >
+    Submit PA requests to payers with clinical documentation, track through
+    approval/denial/peer-to-peer, resolve within clinical urgency SLAs.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: HC-01
+    nexoraa.ai/industry: HEALTHCARE
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: VP Revenue Cycle / Director of Prior Authorization Operations
+  tags:
+    - healthcare
+    - prior-authorization
+    - hipaa
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/hc-01
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-hc-02-medical-coding
+  title: "HC-02: Medical Coding and Claim Edit Resolution"
+  description: >
+    Review clinical documentation for accurate CPT/ICD-10 coding, resolve claim
+    edits, ensure clean claim submission.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: HC-02
+    nexoraa.ai/industry: HEALTHCARE
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: Director of Health Information Management / Coding Manager
+  tags:
+    - healthcare
+    - medical-coding
+    - hipaa
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/hc-02
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-hc-03-eligibility
+  title: "HC-03: Eligibility and Benefits Verification"
+  description: >
+    Verify patient insurance eligibility, determine benefit coverage, calculate
+    patient responsibility before service delivery.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: HC-03
+    nexoraa.ai/industry: HEALTHCARE
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: Director of Patient Access / Revenue Cycle VP
+  tags:
+    - healthcare
+    - eligibility
+    - hipaa
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/hc-03
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-hc-04-referral-mgmt
+  title: "HC-04: Referral Management and Care Coordination"
+  description: >
+    Process specialist referrals, coordinate care transitions, ensure referral
+    completion tracking and loop closure.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: HC-04
+    nexoraa.ai/industry: HEALTHCARE
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: Director of Care Coordination / Medical Director
+  tags:
+    - healthcare
+    - referral-management
+    - hipaa
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/hc-04
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api

@@ -4,12 +4,14 @@ kind: Kustomization
 namespace: nexoraa-system
 
 resources:
-  - ../../base/namespace.yaml
   - ../../base/api/deployment.yaml
   - ../../base/api/service.yaml
+  - ../../base/api/servicemonitor.yaml
   - ../../base/api/hpa.yaml
   - ../../base/temporal-worker/deployment.yaml
   - ../../base/temporal-worker/service.yaml
+  - ../../base/temporal-worker/servicemonitor.yaml
+  - ../../base/monitoring/prometheusrule.yaml
   - ../../base/ui/deployment.yaml
   - ../../base/ui/service.yaml
   - ../../base/kafka/strimzi-kafka.yaml
@@ -17,9 +19,11 @@ resources:
   - pdb-api.yaml
   - pdb-temporal-worker.yaml
 
-commonLabels:
-  app.kubernetes.io/part-of: nexoraa-platform
-  env: production
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/part-of: nexoraa-platform
+      env: production
 
 patches:
   # API: 3 replicas, production resource limits

@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nexoraa-api
+  namespace: nexoraa-system
+  labels:
+    app: nexoraa-api
+    app.kubernetes.io/name: nexoraa-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: nexoraa-platform
+spec:
+  jobLabel: app.kubernetes.io/name
+  selector:
+    matchLabels:
+      app: nexoraa-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s

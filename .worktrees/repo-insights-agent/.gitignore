@@ -1,0 +1,18 @@
+# Binaries
+*.exe
+bin/
+
+# Environment
+.env
+
+# OS
+.DS_Store
+
+# Temp
+tmp/
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/.terraform.lock.hcl

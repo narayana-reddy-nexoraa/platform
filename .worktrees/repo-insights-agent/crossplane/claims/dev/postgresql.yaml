@@ -1,0 +1,23 @@
+---
+# Dev PostgreSQL Claim
+# Provisions a small-tier RDS PostgreSQL instance in us-east-1 for development.
+apiVersion: database.nexoraa.io/v1alpha1
+kind: PostgreSQL
+metadata:
+  name: nexoraa-dev-postgresql
+  namespace: nexoraa-system
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+    environment: dev
+spec:
+  compositionSelector:
+    matchLabels:
+      provider: aws
+      crossplane.io/xrd: xpostgresqls.database.nexoraa.io
+  region: us-east-1
+  size: small
+  version: "16.4"
+  storageGB: 100
+  writeConnectionSecretToRef:
+    name: nexoraa-dev-postgresql-conn

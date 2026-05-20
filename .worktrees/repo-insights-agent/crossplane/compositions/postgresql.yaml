@@ -1,0 +1,253 @@
+---
+# XPostgreSQL — CompositeResourceDefinition
+# Defines a portable PostgreSQL database abstraction for the Nexoraa platform.
+# Supports size tiers (small/medium/large) mapped to RDS instance classes.
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xpostgresqls.database.nexoraa.io
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+spec:
+  group: database.nexoraa.io
+  names:
+    kind: XPostgreSQL
+    plural: xpostgresqls
+  claimNames:
+    kind: PostgreSQL
+    plural: postgresqls
+  connectionSecretKeys:
+    - endpoint
+    - port
+    - username
+    - password
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - region
+                - size
+              properties:
+                region:
+                  type: string
+                  description: AWS region for the RDS instance.
+                  enum:
+                    - us-east-1
+                    - us-east-2
+                    - us-west-2
+                    - eu-west-1
+                    - eu-central-1
+                    - ap-southeast-1
+                size:
+                  type: string
+                  description: >
+                    T-shirt size mapped to RDS instance classes.
+                    small=db.r6g.large, medium=db.r6g.xlarge, large=db.r6g.2xlarge.
+                  enum:
+                    - small
+                    - medium
+                    - large
+                version:
+                  type: string
+                  description: PostgreSQL engine version.
+                  default: "16.4"
+                  enum:
+                    - "14.13"
+                    - "15.8"
+                    - "16.4"
+                storageGB:
+                  type: integer
+                  description: Allocated storage in GiB.
+                  default: 100
+                  minimum: 20
+                  maximum: 16384
+---
+# Composition — wires XPostgreSQL claims to AWS RDS resources
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xpostgresql-aws
+  labels:
+    app.kubernetes.io/part-of: nexoraa-platform
+    app.kubernetes.io/managed-by: crossplane
+    crossplane.io/xrd: xpostgresqls.database.nexoraa.io
+    provider: aws
+spec:
+  compositeTypeRef:
+    apiVersion: database.nexoraa.io/v1alpha1
+    kind: XPostgreSQL
+  writeConnectionSecretsToNamespace: nexoraa-system
+  resources:
+    # --- DB Subnet Group ---------------------------------------------------
+    - name: db-subnet-group
+      base:
+        apiVersion: rds.aws.upbound.io/v1beta1
+        kind: SubnetGroup
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            description: "Nexoraa PostgreSQL DB subnet group"
+            subnetIdSelector:
+              matchLabels:
+                app.kubernetes.io/part-of: nexoraa-platform
+                access: private
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+
+    # --- Parameter Group ---------------------------------------------------
+    - name: db-parameter-group
+      base:
+        apiVersion: rds.aws.upbound.io/v1beta1
+        kind: ParameterGroup
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            family: postgres16
+            description: "Nexoraa PostgreSQL parameter group"
+            parameter:
+              - name: shared_preload_libraries
+                value: "pg_stat_statements,pgaudit"
+                applyMethod: pending-reboot
+              - name: log_statement
+                value: "ddl"
+                applyMethod: immediate
+              - name: log_min_duration_statement
+                value: "1000"
+                applyMethod: immediate
+              - name: idle_in_transaction_session_timeout
+                value: "300000"
+                applyMethod: immediate
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.version
+          toFieldPath: spec.forProvider.family
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "postgres%s"
+            - type: string
+              string:
+                type: TrimSuffix
+                trim: ""
+            - type: string
+              string:
+                type: Regexp
+                regexp:
+                  match: '^postgres(\d+)\.\d+$'
+                  group: 0
+
+    # --- RDS Instance ------------------------------------------------------
+    - name: rds-instance
+      base:
+        apiVersion: rds.aws.upbound.io/v1beta2
+        kind: Instance
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: nexoraa-platform
+            app.kubernetes.io/managed-by: crossplane
+        spec:
+          forProvider:
+            region: us-east-1
+            engine: postgres
+            engineVersion: "16.4"
+            instanceClass: db.r6g.large
+            allocatedStorage: 100
+            storageType: gp3
+            storageEncrypted: true
+            multiAz: true
+            publiclyAccessible: false
+            autoMinorVersionUpgrade: true
+            backupRetentionPeriod: 14
+            backupWindow: "03:00-04:00"
+            maintenanceWindow: "sun:05:00-sun:06:00"
+            deletionProtection: true
+            copyTagsToSnapshot: true
+            performanceInsightsEnabled: true
+            performanceInsightsRetentionPeriod: 731
+            enabledCloudwatchLogsExports:
+              - postgresql
+              - upgrade
+            dbSubnetGroupNameSelector:
+              matchControllerRef: true
+            parameterGroupNameSelector:
+              matchControllerRef: true
+            masterUsername: nexoraa_admin
+            autoGeneratePassword: true
+            masterPasswordSecretRef:
+              namespace: nexoraa-system
+              key: password
+            tags:
+              Environment: ""
+              ManagedBy: crossplane
+              Platform: nexoraa
+          providerConfigRef:
+            name: nexoraa-aws
+      patches:
+        # Region
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.region
+        # Engine version
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.version
+          toFieldPath: spec.forProvider.engineVersion
+        # Storage
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.storageGB
+          toFieldPath: spec.forProvider.allocatedStorage
+        # Instance class — size mapping
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.size
+          toFieldPath: spec.forProvider.instanceClass
+          transforms:
+            - type: map
+              map:
+                small: db.r6g.large
+                medium: db.r6g.xlarge
+                large: db.r6g.2xlarge
+        # Password secret name derived from composite name
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.masterPasswordSecretRef.name
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%s-master-password"
+      connectionDetails:
+        - name: endpoint
+          fromFieldPath: status.atProvider.endpoint
+        - name: port
+          fromFieldPath: status.atProvider.port
+          type: FromFieldPath
+        - name: username
+          fromFieldPath: spec.forProvider.masterUsername
+          type: FromFieldPath
+        - name: password
+          fromConnectionSecretKey: attribute.password

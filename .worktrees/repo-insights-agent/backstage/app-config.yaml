@@ -1,0 +1,94 @@
+app:
+  title: Nexoraa Developer Portal
+  baseUrl: http://localhost:7007
+
+organization:
+  name: Nexoraa
+
+backend:
+  baseUrl: http://localhost:7007
+  listen:
+    port: 7007
+  csp:
+    connect-src: ["'self'", 'http:', 'https:']
+  cors:
+    origin: http://localhost:7007
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
+  database:
+    client: better-sqlite3
+    connection: ':memory:'
+
+integrations:
+  github:
+    - host: github.com
+      token: ${GITHUB_TOKEN}
+
+proxy: {}
+
+techdocs:
+  builder: local
+  generator:
+    runIn: local
+  publisher:
+    type: local
+
+auth:
+  providers: {}
+
+catalog:
+  import:
+    entityFilename: catalog-info.yaml
+    pullRequestBranchName: backstage-integration
+  rules:
+    - allow: [Component, System, API, Resource, Location, Template]
+  locations:
+    # Platform system
+    - type: file
+      target: catalog/services/api.yaml
+      rules:
+        - allow: [Component]
+    - type: file
+      target: catalog/services/temporal-worker.yaml
+      rules:
+        - allow: [Component]
+    - type: file
+      target: catalog/services/kafka.yaml
+      rules:
+        - allow: [Component, Resource]
+    - type: file
+      target: catalog/services/ui.yaml
+      rules:
+        - allow: [Component]
+
+    # SOP workflows by industry
+    - type: file
+      target: catalog/sops/financial-services.yaml
+      rules:
+        - allow: [Component]
+    - type: file
+      target: catalog/sops/insurance.yaml
+      rules:
+        - allow: [Component]
+    - type: file
+      target: catalog/sops/healthcare.yaml
+      rules:
+        - allow: [Component]
+    - type: file
+      target: catalog/sops/hospital-ops.yaml
+      rules:
+        - allow: [Component]
+    - type: file
+      target: catalog/sops/life-sciences.yaml
+      rules:
+        - allow: [Component]
+    - type: file
+      target: catalog/sops/manufacturing.yaml
+      rules:
+        - allow: [Component]
+
+    # Scaffolder templates
+    - type: file
+      target: catalog/templates/new-sop-service.yaml
+      rules:
+        - allow: [Template]

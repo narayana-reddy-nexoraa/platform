@@ -1,0 +1,164 @@
+apiVersion: backstage.io/v1alpha1
+kind: Template
+metadata:
+  name: new-sop-service
+  title: New SOP Workflow Service
+  description: >
+    Scaffold a new SOP workflow for the Nexoraa platform. Generates a Go
+    registration file in internal/sop/registry/ with the standard 6-step agent
+    pattern (intake, data retrieval, classification, decisioning, execution,
+    audit), registers it in the SOP registry, and creates a Backstage catalog
+    entry.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+  tags:
+    - sop
+    - go
+    - temporal
+    - nexoraa
+spec:
+  owner: platform-team
+  type: sop-workflow
+
+  parameters:
+    - title: SOP Identity
+      required:
+        - sopId
+        - name
+        - industry
+      properties:
+        sopId:
+          title: SOP ID
+          type: string
+          description: "Unique SOP identifier (e.g., FS-05, INS-05, HC-05)"
+          pattern: "^[A-Z]{2,4}-\\d{2}$"
+          ui:autofocus: true
+        name:
+          title: SOP Name
+          type: string
+          description: "Human-readable name (e.g., Credit Risk Assessment)"
+          minLength: 5
+          maxLength: 120
+        description:
+          title: Description
+          type: string
+          description: "Brief description of what this SOP automates"
+          ui:widget: textarea
+        industry:
+          title: Industry
+          type: string
+          description: Target industry vertical
+          enum:
+            - FINANCIAL_SERVICES
+            - INSURANCE
+            - HEALTHCARE
+            - HOSPITAL_OPS
+            - LIFE_SCIENCES
+            - MANUFACTURING
+          enumNames:
+            - Financial Services
+            - Insurance
+            - Healthcare
+            - Hospital Operations
+            - Life Sciences
+            - Manufacturing
+
+    - title: Compliance and Ownership
+      required:
+        - complianceFrameworks
+      properties:
+        complianceFrameworks:
+          title: Compliance Frameworks
+          type: array
+          description: Applicable regulatory frameworks
+          items:
+            type: string
+            enum:
+              - BSA_AML
+              - SOX
+              - GDPR
+              - HIPAA
+              - CMS_COP
+              - NAIC
+              - 21_CFR_PART_11
+              - GXP
+              - GVP
+              - FDA_CGMP
+              - ISO_9001
+          uniqueItems: true
+          ui:widget: checkboxes
+        processOwner:
+          title: Process Owner
+          type: string
+          description: "Role title of the process owner (e.g., Chief Compliance Officer)"
+        version:
+          title: Version
+          type: string
+          description: Semantic version
+          default: "1.0.0"
+          pattern: "^\\d+\\.\\d+\\.\\d+$"
+
+  steps:
+    - id: generate-go-registry
+      name: Generate Go SOP registration file
+      action: fetch:template
+      input:
+        url: ./skeleton/sop-go
+        targetPath: internal/sop/registry/
+        values:
+          sopId: ${{ parameters.sopId }}
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          industry: ${{ parameters.industry }}
+          complianceFrameworks: ${{ parameters.complianceFrameworks }}
+          processOwner: ${{ parameters.processOwner }}
+          version: ${{ parameters.version }}
+
+    - id: generate-catalog-entry
+      name: Generate Backstage catalog entry
+      action: fetch:template
+      input:
+        url: ./skeleton/catalog
+        targetPath: backstage/catalog/sops/
+        values:
+          sopId: ${{ parameters.sopId }}
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          industry: ${{ parameters.industry }}
+          complianceFrameworks: ${{ parameters.complianceFrameworks }}
+          processOwner: ${{ parameters.processOwner }}
+          version: ${{ parameters.version }}
+
+    - id: register-catalog
+      name: Register in Backstage catalog
+      action: catalog:register
+      input:
+        catalogInfoUrl: ${{ steps['generate-catalog-entry'].output.remoteUrl }}
+
+    - id: publish
+      name: Create pull request
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?owner=nexoraa&repo=platform
+        branchName: sop/${{ parameters.sopId | lower }}
+        title: "Add SOP ${{ parameters.sopId }}: ${{ parameters.name }}"
+        description: |
+          ## New SOP Workflow
+
+          - **SOP ID:** ${{ parameters.sopId }}
+          - **Name:** ${{ parameters.name }}
+          - **Industry:** ${{ parameters.industry }}
+          - **Compliance:** ${{ parameters.complianceFrameworks | join(', ') }}
+          - **Version:** ${{ parameters.version }}
+
+          ### Generated files
+          - `internal/sop/registry/` -- Go registration with 6-step agent pattern
+          - `backstage/catalog/sops/` -- Backstage catalog entry
+
+  output:
+    links:
+      - title: Pull Request
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Catalog Entry
+        icon: catalog
+        entityRef: ${{ steps['register-catalog'].output.entityRef }}

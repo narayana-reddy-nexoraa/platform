@@ -1,0 +1,130 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-fs-01-kyc
+  title: "FS-01: KYC Customer Onboarding and Due Diligence"
+  description: >
+    Verify customer identity, assess risk tier, collect documentation, and
+    activate or review customer record in CLM system within SLA with
+    regulator-ready audit trail.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: FS-01
+    nexoraa.ai/industry: FINANCIAL_SERVICES
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: Chief Compliance Officer / Head of KYC Operations
+  tags:
+    - financial-services
+    - kyc
+    - bsa-aml
+    - sox
+    - gdpr
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/fs-01
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-fs-02-aml
+  title: "FS-02: AML Transaction Alert Triage"
+  description: >
+    Triage AML transaction monitoring alerts, investigate suspicious activity,
+    determine SAR filing requirement with complete evidence trail.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: FS-02
+    nexoraa.ai/industry: FINANCIAL_SERVICES
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: BSA Officer / Head of Financial Crime Investigations
+  tags:
+    - financial-services
+    - aml
+    - bsa-aml
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/fs-02
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-fs-03-trade-recon
+  title: "FS-03: Trade and Position Reconciliation"
+  description: >
+    Reconcile trade positions across front/middle/back office systems, identify
+    and resolve breaks within SLA.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: FS-03
+    nexoraa.ai/industry: FINANCIAL_SERVICES
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: Head of Operations / Chief Operating Officer
+  tags:
+    - financial-services
+    - trade-reconciliation
+    - sox
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/fs-03
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sop-fs-04-regulatory-reporting
+  title: "FS-04: Regulatory Reporting Workflow (DFAST/CCAR/SOX)"
+  description: >
+    Prepare, validate, and submit regulatory reports (DFAST stress tests, CCAR
+    capital plans, SOX controls) with full audit trail.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    nexoraa.ai/sop-id: FS-04
+    nexoraa.ai/industry: FINANCIAL_SERVICES
+    nexoraa.ai/version: "1.0.0"
+    nexoraa.ai/process-owner: Chief Risk Officer / Head of Regulatory Reporting
+  tags:
+    - financial-services
+    - regulatory-reporting
+    - sox
+    - sop
+  links:
+    - url: https://docs.nexoraa.ai/sops/fs-04
+      title: SOP Documentation
+      icon: docs
+spec:
+  type: sop-workflow
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  dependsOn:
+    - component:default/nexoraa-temporal-worker
+    - component:default/nexoraa-api

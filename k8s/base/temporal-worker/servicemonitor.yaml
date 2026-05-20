@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nexoraa-temporal-worker
+  namespace: nexoraa-system
+  labels:
+    app: nexoraa-temporal-worker
+    app.kubernetes.io/name: nexoraa-temporal-worker
+    app.kubernetes.io/component: temporal-worker
+    app.kubernetes.io/part-of: nexoraa-platform
+spec:
+  jobLabel: app.kubernetes.io/name
+  selector:
+    matchLabels:
+      app: nexoraa-temporal-worker
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s

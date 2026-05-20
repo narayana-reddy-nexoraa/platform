@@ -4,18 +4,22 @@ kind: Kustomization
 namespace: nexoraa-system
 
 resources:
-  - ../../base/namespace.yaml
   - ../../base/api/deployment.yaml
   - ../../base/api/service.yaml
+  - ../../base/api/servicemonitor.yaml
   - ../../base/api/hpa.yaml
   - ../../base/temporal-worker/deployment.yaml
   - ../../base/temporal-worker/service.yaml
+  - ../../base/temporal-worker/servicemonitor.yaml
+  - ../../base/monitoring/prometheusrule.yaml
   - ../../base/ui/deployment.yaml
   - ../../base/ui/service.yaml
 
-commonLabels:
-  app.kubernetes.io/part-of: nexoraa-platform
-  environment: staging
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/part-of: nexoraa-platform
+      environment: staging
 
 patches:
   # API: 2 replicas, moderate resources

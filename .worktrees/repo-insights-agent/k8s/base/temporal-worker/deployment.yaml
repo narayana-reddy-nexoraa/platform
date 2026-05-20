@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexoraa-temporal-worker
+  namespace: nexoraa-system
+  labels:
+    app: nexoraa-temporal-worker
+    app.kubernetes.io/name: nexoraa-temporal-worker
+    app.kubernetes.io/component: temporal-worker
+    app.kubernetes.io/part-of: nexoraa-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nexoraa-temporal-worker
+  template:
+    metadata:
+      labels:
+        app: nexoraa-temporal-worker
+        app.kubernetes.io/name: nexoraa-temporal-worker
+        app.kubernetes.io/component: temporal-worker
+        app.kubernetes.io/part-of: nexoraa-platform
+    spec:
+      containers:
+        - name: temporal-worker
+          image: nexoraa/temporal-worker:latest
+          ports:
+            - containerPort: 8081
+              protocol: TCP
+          env:
+            - name: TEMPORAL_HOST
+              value: nexoraa-temporal.nexoraa-system.svc.cluster.local:7233
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nexoraa-db-credentials
+                  key: DATABASE_URL
+            - name: USE_TEMPORAL
+              value: "true"
+            - name: KAFKA_BROKERS
+              value: nexoraa-kafka-kafka-bootstrap.nexoraa-system.svc.cluster.local:9092
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3

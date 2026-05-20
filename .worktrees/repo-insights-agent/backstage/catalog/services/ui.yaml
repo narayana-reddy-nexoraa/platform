@@ -1,0 +1,26 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: nexoraa-ui
+  description: React single-page application providing the operator dashboard for SOP case management, HITL review queues, audit trail visualization, and tenant administration.
+  annotations:
+    github.com/project-slug: nexoraa/platform
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - react
+    - typescript
+    - vite
+    - frontend
+  links:
+    - url: http://localhost:5173
+      title: Dev Server
+      icon: dashboard
+spec:
+  type: service
+  lifecycle: production
+  owner: platform-team
+  system: nexoraa-platform
+  consumesApis:
+    - nexoraa-rest-api
+  dependsOn:
+    - component:default/nexoraa-api

@@ -1,0 +1,63 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sop-executions-events
+  namespace: nexoraa-system
+  labels:
+    strimzi.io/cluster: nexoraa-kafka
+    app.kubernetes.io/part-of: nexoraa-platform
+spec:
+  topicName: sop.executions.events
+  partitions: 6
+  replicas: 3
+  config:
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sop-hitl-requests
+  namespace: nexoraa-system
+  labels:
+    strimzi.io/cluster: nexoraa-kafka
+    app.kubernetes.io/part-of: nexoraa-platform
+spec:
+  topicName: sop.hitl.requests
+  partitions: 3
+  replicas: 3
+  config:
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sop-hitl-responses
+  namespace: nexoraa-system
+  labels:
+    strimzi.io/cluster: nexoraa-kafka
+    app.kubernetes.io/part-of: nexoraa-platform
+spec:
+  topicName: sop.hitl.responses
+  partitions: 3
+  replicas: 3
+  config:
+    retention.ms: 604800000
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: audit-trail
+  namespace: nexoraa-system
+  labels:
+    strimzi.io/cluster: nexoraa-kafka
+    app.kubernetes.io/part-of: nexoraa-platform
+spec:
+  topicName: audit.trail
+  partitions: 6
+  replicas: 3
+  config:
+    retention.ms: 2592000000
+    cleanup.policy: delete

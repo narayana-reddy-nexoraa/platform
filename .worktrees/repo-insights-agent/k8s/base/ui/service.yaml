@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexoraa-ui
+  namespace: nexoraa-system
+  labels:
+    app: nexoraa-ui
+    app.kubernetes.io/name: nexoraa-ui
+    app.kubernetes.io/component: ui
+    app.kubernetes.io/part-of: nexoraa-platform
+spec:
+  type: ClusterIP
+  selector:
+    app: nexoraa-ui
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
