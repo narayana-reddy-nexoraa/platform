@@ -1,0 +1,21 @@
+# Staging: persistent TSDB + Grafana, moderate retention.
+
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    replicas: 1
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+
+grafana:
+  persistence:
+    enabled: true
+    size: 5Gi
+
+alertmanager:
+  enabled: false

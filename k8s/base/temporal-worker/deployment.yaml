@@ -25,7 +25,11 @@ spec:
         - name: temporal-worker
           image: nexoraa/temporal-worker:latest
           ports:
-            - containerPort: 8081
+            - name: health
+              containerPort: 8081
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
               protocol: TCP
           env:
             - name: TEMPORAL_HOST

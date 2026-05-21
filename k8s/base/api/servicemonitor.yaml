@@ -1,5 +1,5 @@
-apiVersion: v1
-kind: Service
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
 metadata:
   name: nexoraa-api
   namespace: nexoraa-system
@@ -9,11 +9,12 @@ metadata:
     app.kubernetes.io/component: api
     app.kubernetes.io/part-of: nexoraa-platform
 spec:
-  type: ClusterIP
+  jobLabel: app.kubernetes.io/name
   selector:
-    app: nexoraa-api
-  ports:
-    - name: http
-      port: 8080
-      targetPort: 8080
-      protocol: TCP
+    matchLabels:
+      app: nexoraa-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s

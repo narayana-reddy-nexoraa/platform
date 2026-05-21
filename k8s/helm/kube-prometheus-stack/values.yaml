@@ -1,0 +1,96 @@
+# Shared defaults for kube-prometheus-stack (self-hosted Prometheus + Grafana).
+# Install: ./scripts/install-monitoring.sh <dev|staging|prod>
+# Operator + dashboards + runbooks: docs/observability.md
+#
+# Chart: https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
+
+fullnameOverride: ""
+
+# Discover ServiceMonitors / PodMonitors without requiring the Helm release label.
+prometheus:
+  prometheusSpec:
+    serviceMonitorNamespaceSelector: {}
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorNamespaceSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleNamespaceSelector: {}
+    ruleSelectorNilUsesHelmValues: false
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    retention: 15d
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+grafana:
+  enabled: true
+  defaultDashboardsEnabled: true
+  adminUser: admin
+  # Set by scripts/install-monitoring.sh from GRAFANA_ADMIN_PASSWORD or
+  # GF_SECURITY_ADMIN_PASSWORD in .env. Do not hardcode production secrets here.
+  adminPassword: ""
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: nexoraa
+          orgId: 1
+          folder: Nexoraa
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/nexoraa
+  extraConfigmapMounts:
+    - name: nexoraa-dashboards
+      mountPath: /var/lib/grafana/dashboards/nexoraa
+      configMap: nexoraa-grafana-dashboards
+      readOnly: true
+
+# Alertmanager is disabled for now. Prometheus and Grafana dashboards remain
+# available for normal alert visibility without mail/SMS/pager routing.
+alertmanager:
+  enabled: false
+
+kubeStateMetrics:
+  enabled: true
+
+nodeExporter:
+  enabled: true
+
+# CoreDNS / etcd etc. — keep defaults; disable noisy components if needed later.
+coreDns:
+  enabled: true
+
+defaultRules:
+  create: true
+  rules:
+    alertmanager: false
+    etcd: true
+    configReloaders: true
+    general: true
+    k8s: true
+    kubeApiserverAvailability: true
+    kubeApiserverSlos: true
+    kubelet: true
+    kubernetesApps: true
+    kubernetesResources: true
+    kubernetesStorage: true
+    kubernetesSystem: true
+    network: true
+    node: true
+    prometheus: true
+    prometheusOperator: true
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
