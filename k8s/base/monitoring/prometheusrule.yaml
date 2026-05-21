@@ -43,7 +43,7 @@ spec:
     - name: execution_engine_warning
       rules:
         - alert: HighP95Latency
-          expr: histogram_quantile(0.95, rate(execution_engine_execution_duration_seconds_bucket[5m])) > 5
+          expr: histogram_quantile(0.95, sum by (le) (rate(execution_engine_execution_duration_seconds_bucket[5m]))) > 5
           for: 5m
           labels:
             severity: warning

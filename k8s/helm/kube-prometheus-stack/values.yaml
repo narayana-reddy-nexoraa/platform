@@ -30,8 +30,9 @@ grafana:
   enabled: true
   defaultDashboardsEnabled: true
   adminUser: admin
-  # Override per env or via --set grafana.adminPassword=... in install script
-  adminPassword: changeme
+  # Set by scripts/install-monitoring.sh from GRAFANA_ADMIN_PASSWORD or
+  # GF_SECURITY_ADMIN_PASSWORD in .env. Do not hardcode production secrets here.
+  adminPassword: ""
   dashboardProviders:
     dashboardproviders.yaml:
       apiVersion: 1

@@ -248,14 +248,14 @@
     },
     {
       "id": 7,
-      "title": "Scrape duration (p99)",
+      "title": "Scrape duration (max)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "max by (job) (scrape_duration_seconds{quantile=\"0.99\"})",
-          "legendFormat": "{{job}} p99",
+          "expr": "max by (job) (scrape_duration_seconds)",
+          "legendFormat": "{{job}} max",
           "refId": "A"
         }
       ],
@@ -702,7 +702,7 @@
       }
     },
     {
-      "id": 24,
+      "id": 33,
       "title": "Firing alerts",
       "type": "stat",
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 34 },
@@ -737,7 +737,7 @@
       }
     },
     {
-      "id": 25,
+      "id": 34,
       "title": "Pending alerts",
       "type": "stat",
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 34 },

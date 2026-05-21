@@ -29,11 +29,20 @@
 # -----------------------------------------------------------------------------
 set -euo pipefail
 
-ENV="${1:-dev}"
+ENV="dev"
 SKIP_KUSTOMIZE=false
 for arg in "$@"; do
   case "${arg}" in
+    dev|staging|prod) ENV="${arg}" ;;
     --skip-kustomize) SKIP_KUSTOMIZE=true ;;
+    -h|--help)
+      echo "Usage: $0 [dev|staging|prod] [--skip-kustomize]"
+      exit 0
+      ;;
+    *)
+      echo "Usage: $0 [dev|staging|prod] [--skip-kustomize]"
+      exit 1
+      ;;
   esac
 done
 

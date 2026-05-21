@@ -13,7 +13,7 @@
 # -----------------------------------------------------------------------------
 set -euo pipefail
 
-ENV="${1:-dev}"
+ENV="dev"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 HELM_DIR="${REPO_ROOT}/k8s/helm/kube-prometheus-stack"
@@ -21,6 +21,20 @@ RELEASE_NAME="kube-prometheus-stack"
 NAMESPACE="monitoring"
 # Pin chart version for reproducible installs (https://github.com/prometheus-community/helm-charts/releases)
 CHART_VERSION="${KPS_CHART_VERSION:-67.2.0}"
+
+for arg in "$@"; do
+  case "${arg}" in
+    dev|staging|prod) ENV="${arg}" ;;
+    -h|--help)
+      echo "Usage: $0 [dev|staging|prod]"
+      exit 0
+      ;;
+    *)
+      echo "Usage: $0 [dev|staging|prod]"
+      exit 1
+      ;;
+  esac
+done
 
 case "${ENV}" in
   dev|staging|prod) ;;
@@ -30,10 +44,57 @@ case "${ENV}" in
     ;;
 esac
 
+DOTENV_FILE="${REPO_ROOT}/.env"
+read_dotenv_value() {
+  local wanted_key="$1"
+  local line key value
+
+  [ -f "${DOTENV_FILE}" ] || return 1
+  while IFS= read -r line || [ -n "${line}" ]; do
+    line="${line%$'\r'}"
+    case "${line}" in
+      ""|\#*) continue ;;
+    esac
+
+    key="${line%%=*}"
+    value="${line#*=}"
+    key="${key#export }"
+    if [ "${key}" = "${wanted_key}" ]; then
+      case "${value}" in
+        \"*\") value="${value#\"}"; value="${value%\"}" ;;
+        \'*\') value="${value#\'}"; value="${value%\'}" ;;
+      esac
+      printf '%s\n' "${value}"
+      return 0
+    fi
+  done < "${DOTENV_FILE}"
+
+  return 1
+}
+
 VALUES_FILES=(
   -f "${HELM_DIR}/values.yaml"
   -f "${HELM_DIR}/values-${ENV}.yaml"
 )
+
+GRAFANA_PASSWORD="${GRAFANA_ADMIN_PASSWORD:-}"
+if [ -z "${GRAFANA_PASSWORD}" ]; then
+  GRAFANA_PASSWORD="$(read_dotenv_value GRAFANA_ADMIN_PASSWORD || true)"
+fi
+if [ -z "${GRAFANA_PASSWORD}" ]; then
+  GRAFANA_PASSWORD="${GF_SECURITY_ADMIN_PASSWORD:-}"
+fi
+if [ -z "${GRAFANA_PASSWORD}" ]; then
+  GRAFANA_PASSWORD="$(read_dotenv_value GF_SECURITY_ADMIN_PASSWORD || true)"
+fi
+if [ "${ENV}" != "dev" ] && { [ -z "${GRAFANA_PASSWORD}" ] || [ "${GRAFANA_PASSWORD}" = "changeme" ]; }; then
+  echo "ERROR: GRAFANA_ADMIN_PASSWORD required outside dev and must not be 'changeme'"
+  exit 1
+fi
+if [ "${ENV}" = "dev" ] && [ -z "${GRAFANA_PASSWORD}" ]; then
+  GRAFANA_PASSWORD="changeme"
+  echo "Note: using default Grafana admin password 'changeme' for dev. Set GRAFANA_ADMIN_PASSWORD or GF_SECURITY_ADMIN_PASSWORD in .env to override."
+fi
 
 echo "=== Nexoraa monitoring (kube-prometheus-stack) ==="
 echo "Environment: ${ENV}"
@@ -60,11 +121,6 @@ fi
 kubectl -n "${NAMESPACE}" create configmap nexoraa-grafana-dashboards \
   "${CM_ARGS[@]}" \
   --dry-run=client -o yaml | kubectl apply -f -
-
-GRAFANA_PASSWORD="${GRAFANA_ADMIN_PASSWORD:-changeme}"
-if [ "${ENV}" = "dev" ] && [ "${GRAFANA_PASSWORD}" = "changeme" ]; then
-  echo "Note: using default Grafana admin password 'changeme' for dev. Set GRAFANA_ADMIN_PASSWORD for other envs."
-fi
 
 echo ">>> Installing / upgrading ${RELEASE_NAME}..."
 helm upgrade --install "${RELEASE_NAME}" prometheus-community/kube-prometheus-stack \
